@@ -5,4 +5,9 @@ import Html exposing (Html)
 
 main : Html msg
 main =
-    Html.text "HELLO, world!"
+     Html.text message
+
+
+message : String
+message =
+     "Hello, world!"

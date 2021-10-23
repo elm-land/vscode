@@ -13,7 +13,9 @@ import {
   InitializeResult
 } from 'vscode-languageserver/node'
 
-import { TextDocument } from 'vscode-languageserver-textdocument'
+import { Position, TextDocument } from 'vscode-languageserver-textdocument'
+import { URI } from 'vscode-uri'
+import { exec } from 'child_process'
 
 const pluginName = `elmLand`
 
@@ -102,7 +104,7 @@ documents.onDidClose(e => {
   settingsCache.delete(e.document.uri)
 })
 
-documents.onDidChangeContent(change => {
+documents.onDidSave(change => {
   validateTextDocument(change.document)
 })
 
@@ -110,47 +112,16 @@ const validateTextDocument = async (textDocument: TextDocument): Promise<void> =
   const uri = textDocument.uri
   const settings = await getSettingsCache(uri)
 
-  const text = textDocument.getText()
-  const pattern = /\b[A-Z]{2,}\b/g
-  let m: RegExpExecArray | null = null
+  const { path } = URI.parse(uri)
 
-  let problems = 0
-  let diagnostics: Diagnostic[] = []
+  const error = await Elm.compile({ path })
 
-  while ((m = pattern.exec(text)) && problems < settings.maxNumberOfProblems) {
-    problems++
-    let diagnostic: Diagnostic = {
-      severity: DiagnosticSeverity.Warning,
-      range: {
-        start: textDocument.positionAt(m.index),
-        end: textDocument.positionAt(m.index + m[0].length),
-      },
-      message: `${m[0]} is all uppercase`,
-      source: 'ex'
-    }
-
-    if (hasDiagnosticRelatedInformationCapability) {
-      diagnostic.relatedInformation = [
-        {
-          message: 'Spelling matters',
-          location: {
-            uri,
-            range: Object.assign({}, diagnostic.range)
-          }
-        },
-        {
-          message: 'Particularly for names',
-          location: {
-            uri,
-            range: Object.assign({}, diagnostic.range)
-          }
-        }
-      ]
-    }
-    diagnostics.push(diagnostic)
+  if (error) {
+    const diagnostics = Elm.toDiagnostics({ error })
+    connection.sendDiagnostics({ uri, diagnostics })
+  } else {
+    connection.sendDiagnostics({ uri, diagnostics: [] })
   }
-
-  connection.sendDiagnostics({ uri, diagnostics })
 }
 
 connection.onDidChangeWatchedFiles((_change: unknown) => {
@@ -190,3 +161,119 @@ connection.onCompletionResolve((item: CompletionItem): CompletionItem => {
 documents.listen(connection)
 
 connection.listen()
+
+
+// LIB
+
+type ElmError
+  = { kind: 'compile-errors', errors: CompileError[] }
+  | { kind: 'unknown', raw: string }
+
+type CompileError = {
+  name: string
+  path: string
+  problems: CompileErrorProblem[]
+}
+
+type CompileErrorProblem = {
+  title: string
+  region: CompileErrorRegion
+  message: ElmMessage
+}
+
+type CompileErrorRegion = {
+  start: ErrorLocation
+  end: ErrorLocation
+}
+
+type ErrorLocation = {
+  line: number
+  column: number
+}
+
+type ElmMessage = ElmMessageLine[]
+
+type ElmMessageLine =
+  string
+  | ElmFormattedLine
+
+type ElmFormattedLine = {
+  bold: boolean,
+  underline: boolean,
+  color: ElmMessageColor | null,
+  string: string
+}
+
+type ElmMessageColor = 'RED' | 'yellow'
+
+const Elm = {
+  compile: (input: { path: string }): Promise<ElmError | undefined> => {
+
+    const command = `npx elm make ${input.path} --output=/dev/null --report=json`
+
+    const promise: Promise<ElmError | undefined> = new Promise((resolve) =>
+      exec(command, (err, stdout, stderr) => {
+        if (err) {
+          console.error('ERR', stderr)
+          try {
+            const json = JSON.parse(stderr)
+
+            switch (json.type) {
+              case 'compile-errors':
+                return resolve(
+                  { kind: 'compile-errors', errors: json.errors }
+                )
+              default:
+                throw new Error("Unhandled error type: " + json.type)
+            }
+          } catch (ex) {
+            console.error({ exception: ex, stderr })
+            resolve({ kind: 'unknown', raw: stderr })
+          }
+        } else {
+          console.info('OK', stdout)
+          resolve(undefined)
+        }
+      }))
+
+    return promise
+  },
+
+  toDiagnostics: (input: { error: ElmError }): Diagnostic[] => {
+    switch (input.error.kind) {
+      case 'compile-errors':
+        return input.error.errors.flatMap(error => {
+          const problems = error.problems
+          return problems.map(problem => {
+            const diagnostic: Diagnostic = {
+              severity: DiagnosticSeverity.Error,
+              range: {
+                start: Elm.fromErrorLocation(problem.region.start),
+                end: Elm.fromErrorLocation(problem.region.end)
+              },
+              message: Elm.formatErrorMessage(problem.message)
+            }
+            return diagnostic
+          })
+        })
+      case 'unknown':
+        return []
+    }
+  },
+  fromErrorLocation: (location: ErrorLocation): Position => {
+    return { line: location.line - 1, character: location.column - 1 }
+  },
+  formatErrorMessage: (message: ElmMessage): string => {
+    return message.map(line => {
+      if (typeof line === 'string') {
+        return line
+      } else {
+        // VS Code Diagnostics do not support color error messages
+        // if (line.color === 'RED') {
+        //   return "\u001b[31m" + line.string + '\u001b[0m'
+        // }
+        return line.string
+      }
+    }).join('')
+  }
+}
