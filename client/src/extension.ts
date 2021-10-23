@@ -29,7 +29,7 @@ export const activate = (context: ExtensionContext): void => {
           '--inspect=6009'
         ]
       }
-    },
+    }
   }
 
   const clientOptions: LanguageClientOptions = {
@@ -47,6 +47,8 @@ export const activate = (context: ExtensionContext): void => {
     serverOptions,
     clientOptions
   )
+
+  client.start()
 }
 
 export const deactivate = (): Thenable<void> | undefined => {

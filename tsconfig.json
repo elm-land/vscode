@@ -5,13 +5,12 @@
     "lib": [
       "ES2019"
     ],
-    "outDir": "dist",
-    "sourceMap": true,
-    "strict": true
+    "outDir": "out",
+    "rootDir": "src",
+    "sourceMap": true
   },
   "include": [
-    "server/src/**/*.ts",
-    "client/src/**/*.ts"
+    "src"
   ],
   "exclude": [
     "node_modules"
