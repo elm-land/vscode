@@ -1,0 +1,83 @@
+{
+  "name": "@elm-land/vscode",
+  "version": "1.0.0",
+  "description": "Elm plugin",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/elm-land/vscode.git"
+  },
+  "engines": {
+    "vscode": "^1.52.0"
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -b",
+    "watch": "tsc -b -w",
+    "postinstall": "(cd client && npm install && cd ../server && npm install)"
+  },
+  "keywords": [
+    "elm",
+    "vscode",
+    "plugin",
+    "lsp"
+  ],
+  "author": "Ryan Haskell-Glatz",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/elm-land/vscode/issues"
+  },
+  "homepage": "https://github.com/elm-land/vscode#readme",
+  "main": "./client/dist/extension.js",
+  "activationEvents": [
+    "onLanguage:elm"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "elm",
+        "aliases": [
+          "Elm",
+          "elm"
+        ],
+        "extensions": [
+          ".elm"
+        ],
+        "path": "./client/syntax/language.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "elm",
+        "scopeName": "source.elm",
+        "path": "./client/syntax/grammar.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Example configuration",
+      "properties": {
+        "elmLand.maxNumberOfProblems": {
+          "scope": "resource",
+          "type": "number",
+          "default": 100,
+          "description": "Controls the maximum number of problems produced by the server."
+        },
+        "elmLand.trace.server": {
+          "scope": "window",
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the language server."
+        }
+      }
+    }
+  },
+  "devDependencies": {
+    "@types/node": "16.11.4",
+    "typescript": "4.4.4"
+  }
+}

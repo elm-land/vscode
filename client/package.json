@@ -1,0 +1,14 @@
+{
+  "name": "@elm-land/vscode-client",
+  "version": "1.0.0",
+  "description": "Client for @elm-land/vscode",
+  "author": "Ryan Haskell-Glatz",
+  "license": "ISC",
+  "dependencies": {
+    "vscode-languageclient": "7.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^16.11.4",
+    "@types/vscode": "1.61.0"
+  }
+}
