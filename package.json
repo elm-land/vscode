@@ -10,10 +10,11 @@
     "vscode": "^1.52.0"
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "dev": "npm i && npm run watch",
     "compile": "tsc -b",
     "watch": "tsc -b -w",
-    "build": "npm run compile && vsce package",
+    "bundle": "npm run compile && vsce package",
+    "vscode:prepublish": "npm run compile",
     "postinstall": "(cd client && npm install && cd ../server && npm install)"
   },
   "keywords": [
