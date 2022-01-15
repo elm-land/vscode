@@ -1,5 +1,5 @@
 {
-  "name": "@elm-land/vscode",
+  "name": "elm-land",
   "version": "1.0.0",
   "description": "Elm plugin",
   "repository": {
@@ -22,6 +22,7 @@
     "lsp"
   ],
   "author": "Ryan Haskell-Glatz",
+  "publisher": "elm-land",
   "license": "ISC",
   "bugs": {
     "url": "https://github.com/elm-land/vscode/issues"
@@ -29,9 +30,28 @@
   "homepage": "https://github.com/elm-land/vscode#readme",
   "main": "./client/dist/extension.js",
   "activationEvents": [
+    "workspaceContains:**/elm.json",
     "onLanguage:elm"
   ],
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "elm-land",
+          "title": "Elm Land",
+          "icon": "client/webview/rainbow.svg"
+        }
+      ]
+    },
+    "views": {
+      "elm-land": [
+        {
+          "type": "webview",
+          "id": "elmLand.webview",
+          "name": "Elm Land"
+        }
+      ]
+    },
     "languages": [
       {
         "id": "elm",

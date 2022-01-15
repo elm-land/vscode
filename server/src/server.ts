@@ -13,9 +13,10 @@ import {
   InitializeResult
 } from 'vscode-languageserver/node'
 
-import { Position, TextDocument } from 'vscode-languageserver-textdocument'
+import { Position, TextDocument, TextEdit } from 'vscode-languageserver-textdocument'
 import { URI } from 'vscode-uri'
 import { exec } from 'child_process'
+import { readFile } from 'fs/promises'
 
 const pluginName = `elmLand`
 
@@ -36,10 +37,7 @@ connection.onInitialize((params: InitializeParams) => {
 
   const result: InitializeResult = {
     capabilities: {
-      textDocumentSync: TextDocumentSyncKind.Incremental,
-      completionProvider: { // "This server supports code completion"
-        resolveProvider: true
-      }
+      textDocumentSync: TextDocumentSyncKind.Incremental
     }
   }
 
@@ -60,7 +58,7 @@ connection.onInitialized(() => {
   }
   if (hasWorkspaceFolderCapability) {
     connection.workspace.onDidChangeWorkspaceFolders(_event => {
-      connection.console.log(`Workspace folder change event received.`)
+
     })
   }
 })
@@ -104,6 +102,10 @@ documents.onDidClose(e => {
   settingsCache.delete(e.document.uri)
 })
 
+documents.onDidOpen(change => {
+  validateTextDocument(change.document)
+})
+
 documents.onDidSave(change => {
   validateTextDocument(change.document)
 })
@@ -126,36 +128,6 @@ const validateTextDocument = async (textDocument: TextDocument): Promise<void> =
 
 connection.onDidChangeWatchedFiles((_change: unknown) => {
   connection.console.log(`We received a file change event`)
-})
-
-connection.onCompletion((_textDocPosition: TextDocumentPositionParams): CompletionItem[] => {
-  return [
-    {
-      label: 'TypeScript',
-      kind: CompletionItemKind.Text,
-      data: 1
-    },
-    {
-      label: 'JavaScript',
-      kind: CompletionItemKind.Text,
-      data: 2
-    }
-  ]
-})
-
-connection.onCompletionResolve((item: CompletionItem): CompletionItem => {
-  switch (item.data) {
-    case 1:
-      item.detail = 'TypeScript details'
-      item.documentation = 'TypeScript documentation'
-      return item
-    case 2:
-      item.detail = 'JavaScript details'
-      item.documentation = 'JavaScript documentation'
-      return item
-    default:
-      return item
-  }
 })
 
 documents.listen(connection)
@@ -212,9 +184,8 @@ const Elm = {
     const command = `npx elm make ${input.path} --output=/dev/null --report=json`
 
     const promise: Promise<ElmError | undefined> = new Promise((resolve) =>
-      exec(command, (err, stdout, stderr) => {
+      exec(command, (err, _, stderr) => {
         if (err) {
-          console.error('ERR', stderr)
           try {
             const json = JSON.parse(stderr)
 
@@ -227,11 +198,9 @@ const Elm = {
                 throw new Error("Unhandled error type: " + json.type)
             }
           } catch (ex) {
-            console.error({ exception: ex, stderr })
             resolve({ kind: 'unknown', raw: stderr })
           }
         } else {
-          console.info('OK', stdout)
           resolve(undefined)
         }
       }))
@@ -252,6 +221,7 @@ const Elm = {
                 end: Elm.fromErrorLocation(problem.region.end)
               },
               message: Elm.formatErrorMessage(problem.message)
+              // message: problem.title
             }
             return diagnostic
           })

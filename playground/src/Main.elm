@@ -1,13 +1,8 @@
 module Main exposing (main)
 
-import Html exposing (Html)
+import Html
+import UI
 
 
-main : Html msg
 main =
-     Html.text message
-
-
-message : String
-message =
-     "Hello, world!"
+    Html.text "Hello!"
