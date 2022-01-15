@@ -10,7 +10,8 @@ import {
   CompletionItemKind,
   TextDocumentPositionParams,
   TextDocumentSyncKind,
-  InitializeResult
+  InitializeResult,
+  DiagnosticTag
 } from 'vscode-languageserver/node'
 
 import { Position, TextDocument, TextEdit } from 'vscode-languageserver-textdocument'
@@ -110,19 +111,24 @@ documents.onDidSave(change => {
   validateTextDocument(change.document)
 })
 
+// let uris : { [uri: string]: true } = {}
+
 const validateTextDocument = async (textDocument: TextDocument): Promise<void> => {
   const uri = textDocument.uri
+  // uris[textDocument.uri] = true
   const settings = await getSettingsCache(uri)
 
-  const { path } = URI.parse(uri)
+  const parsedUri = URI.parse(uri)
 
-  const error = await Elm.compile({ path })
+  const error = await Elm.compile({ path: parsedUri.path })
 
   if (error) {
-    const diagnostics = Elm.toDiagnostics({ error })
+    const diagnostics = Elm.toDiagnostics({ path: parsedUri.fsPath, error })
     connection.sendDiagnostics({ uri, diagnostics })
   } else {
-    connection.sendDiagnostics({ uri, diagnostics: [] })
+    // for (let uri of Object.keys(uris)) {
+      connection.sendDiagnostics({ uri, diagnostics: [] })
+    // }
   }
 }
 
@@ -208,23 +214,27 @@ const Elm = {
     return promise
   },
 
-  toDiagnostics: (input: { error: ElmError }): Diagnostic[] => {
+  toDiagnostics: (input: { path: string, error: ElmError }): Diagnostic[] => {
     switch (input.error.kind) {
       case 'compile-errors':
         return input.error.errors.flatMap(error => {
           const problems = error.problems
-          return problems.map(problem => {
-            const diagnostic: Diagnostic = {
-              severity: DiagnosticSeverity.Error,
-              range: {
-                start: Elm.fromErrorLocation(problem.region.start),
-                end: Elm.fromErrorLocation(problem.region.end)
-              },
-              message: Elm.formatErrorMessage(problem.message)
-              // message: problem.title
-            }
-            return diagnostic
-          })
+
+          if (isCaseInsensitiveMatch(error.path, input.path)) {
+            return problems.map(problem => {
+              const diagnostic: Diagnostic = {
+                severity: DiagnosticSeverity.Error,
+                range: {
+                  start: Elm.fromErrorLocation(problem.region.start),
+                  end: Elm.fromErrorLocation(problem.region.end)
+                },
+                message: Elm.formatErrorMessage(problem.message)
+              }
+              return diagnostic
+            })
+          } else {
+            return []
+          }
         })
       case 'unknown':
         return []
@@ -246,4 +256,9 @@ const Elm = {
       }
     }).join('')
   }
+}
+
+
+const isCaseInsensitiveMatch = (a : string, b : string) : boolean => {
+  return a.toLowerCase() === b.toLowerCase()
 }
