@@ -1,7 +1,7 @@
 {
   "name": "elm-land",
   "version": "1.0.0",
-  "description": "Elm plugin",
+  "description": "A plugin for Elm, designed by the folks at https://elm.land",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/elm-land/vscode.git"
@@ -13,6 +13,7 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -b",
     "watch": "tsc -b -w",
+    "build": "npm run compile && vsce package",
     "postinstall": "(cd client && npm install && cd ../server && npm install)"
   },
   "keywords": [
@@ -22,6 +23,8 @@
     "lsp"
   ],
   "author": "Ryan Haskell-Glatz",
+  "displayName": "Elm Land",
+  "icon": "elm-land-128.png",
   "publisher": "elm-land",
   "license": "ISC",
   "bugs": {

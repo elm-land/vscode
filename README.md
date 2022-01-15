@@ -7,3 +7,9 @@
 - [ ] Provide color error message output
 - [ ] Jump to definition
 - [ ] Module and record autocomplete on "."
+
+## building the plugin
+
+```
+npm run build
+```
