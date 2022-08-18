@@ -7,6 +7,7 @@
 - [x] Underline Elm compiler errors
 - [x] Run elm format on save
 - [ ] Jump to definition
+- [ ] Bonus: Find all usages
 
 ---
 
