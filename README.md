@@ -1,36 +1,22 @@
-# @elm-land/vscode
-> a minimal VS Code plugin for Elm
+# Elm Plugin for Visual Studio Code
 
-## features
+## Install
 
-- [x] Syntax highlighting
-- [x] Underline Elm compiler errors
-- [x] Run elm format on save
-- [ ] Jump to definition
-- [ ] Bonus: Find all usages
+Visual Studio Code is available for Mac, Windows, and Linux.
 
----
+- [Install VS Code](https://code.visualstudio.com/)
+- [Find the "Elm Land" plugin](https://code.visualstudio.com/docs/editor/extension-marketplace#_install-an-extension)
 
-## contributing
+## Highlighted Features
 
-### local development
+- [x] Syntax Highlighting
+- [x] Format on save
+- [ ] Inline error highlighting
 
-```
-npm run dev
-```
+## Additional Features
 
-This command will make sure your TypeScript code is always compiling in the background.
-
-You can play around with the plugin in your debugger. Press `F5` to run it!
-
-
-### bundling the plugin
-
-```
-npm run bundle
-```
-
-This command will rebuild the `elm-land-1.0.0.vsix` file you see at the root of this repo.
-
-You can use this VSIX file to install the extension by hand, without it needing to be published on the VS code store.
-
+- [x] Inline autocomplete for packages
+- [ ] Autocomplete for local files
+- [ ] Jump-to-definition
+- [ ] Find usages
+- [ ] Offline-friendly package docs
