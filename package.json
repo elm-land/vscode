@@ -31,16 +31,10 @@
         "type": "object",
         "title": "Elm Land",
         "properties": {
-          "elmLand.elmJsonLocation": {
-            "description": "The filepath to your project's elm.json file",
-            "type": "string",
-            "default": "elm.json",
-            "scope": "resource"
-          },
-          "elmLand.mainModuleLocation": {
-            "description": "The filepath to your project's Main module",
-            "type": "string",
-            "default": "src/Main.elm",
+          "elmLand.entrypointFilepaths": {
+            "description": "The filepath to your project's Main module, relative to the elm.json file.",
+            "type": "array",
+            "default": [ "src/Main.elm" ],
             "scope": "resource"
           }
         }

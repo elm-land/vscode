@@ -39,7 +39,7 @@ module.exports = {
     }
 
     if (position.line === 0 && position.character < 'module'.length) {
-      return [{ insertText: moduleSuggestion }]
+      return [{ insertText: moduleSuggestion, completeBracketPairs: true }]
     }
 
     let recommendations = [
@@ -48,18 +48,22 @@ module.exports = {
       { regex: /^module\s+\S*/, suggestions: [moduleName] },
       // imports
       { regex: /^import\s+\S+\s+\S*/, suggestions: ['exposing ', 'as '] },
-      { regex: /^import\s+Html\.\S*/, suggestions: ['Attributes', 'Events'] },
-      { regex: /^import\s+Browser\.\S*/, suggestions: ['Dom', 'Events', 'Navigation'] },
+      { regex: /^import\s+Html\.Attributes\S+/, suggestions: [] },
+      { regex: /^import\s+Html\.Events\S+/, suggestions: [] },
+      { regex: /^import\s+Html\s+exposing\s+\([^\)\s]*/, suggestions: ['Html', 'Attribute', 'text', 'node', 'map', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'p', 'hr', 'pre', 'blockquote', 'span', 'a', 'code', 'button'] },
+      { regex: /^import\s+Html\.[^\.\s]+/, suggestions: ['Attributes', 'Events'] },
+      { regex: /^import\s+Browser\.[^\.\s]+/, suggestions: ['Dom', 'Events', 'Navigation'] },
       { regex: /^import\s+[^\.\s]+/, suggestions: ['Array', 'Browser', 'Bitwise', 'Dict', 'Process', 'Set', 'Task', 'Html'] },
       // type annotations
-      { regex: /:\s+Html\.\S*/, suggestions: ['Html', 'Attribute'] },
-      { regex: /->\s+Html\.\S*/, suggestions: ['Html', 'Attribute'] },
-      { regex: /:\s+\S*/, suggestions: ['Html'] },
-      { regex: /->\s+\S*/, suggestions: ['Html'] },
+      { regex: /:\s+Html\.[^\.\s]+/, suggestions: ['Html', 'Attribute'] },
+      { regex: /->\s+Html\.[^\.\s]+/, suggestions: ['Html', 'Attribute'] },
+      { regex: /^main\s+:\s+[^\.\s]*/, suggestions: ['Html msg', 'Program () Model Msg'] },
+      { regex: /:\s+[^\.\s]+/, suggestions: ['Html'] },
+      { regex: /->\s+[^\.\s]+/, suggestions: ['Html'] },
       // module autocomplete
-      { regex: /\s*Html\.Events\.\S*/, suggestions: ['onClick', 'onDoubleClick', 'onMouseDown', 'onMouseUp', 'onMouseEnter', 'onMouseLeave', 'onMouseOver', 'onMouseOut', 'onInput', 'onSubmit'] },
-      { regex: /\s*Html\.Attributes\.\S*/, suggestions: ['style', 'property', 'attribute', 'map', 'class', 'classList', 'id', 'title', 'hidden'] },
-      { regex: /\s*Html\.\S*/, suggestions: ['Events', 'Attributes', 'text', 'node', 'map', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'p', 'hr', 'pre', 'blockquote', 'span', 'a', 'code'] }
+      { regex: /\s*Html\.Events\.[^\.\s]+/, suggestions: ['onClick', 'onDoubleClick', 'onMouseDown', 'onMouseUp', 'onMouseEnter', 'onMouseLeave', 'onMouseOver', 'onMouseOut', 'onInput', 'onSubmit'] },
+      { regex: /\s*Html\.Attributes\.[^\.\s]+/, suggestions: ['style', 'property', 'attribute', 'map', 'class', 'classList', 'id', 'title', 'hidden'] },
+      { regex: /\s*Html\.[^\.\s]+/, suggestions: ['Events', 'Attributes', 'text', 'node', 'map', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'p', 'hr', 'pre', 'blockquote', 'span', 'a', 'code', 'button'] }
     ]
 
     for (let rec of recommendations) {

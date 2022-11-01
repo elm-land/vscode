@@ -1,6 +1,6 @@
 module Person exposing (Person)
 
-import File
+import Fart
 
 
 type alias Person =
