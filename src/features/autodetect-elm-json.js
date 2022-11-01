@@ -5,10 +5,10 @@ module.exports = async (globalState) => {
   let config = vscode.workspace.getConfiguration('elmLand')
 
   let settings = {
-    entrypointFilepaths: config.get('entrypointFilepaths') || ['src/Main.elm']
+    entrypointFilepaths: config.get('entrypointFilepaths')
   }
 
-  let elmJsonFileUris = await vscode.workspace.findFiles('**/*/elm.json')
+  let elmJsonFileUris = await vscode.workspace.findFiles('elm.json')
 
   globalState.elmJsonFiles = await Promise.all(elmJsonFileUris.map(async uri => {
     let projectFolder = uri.fsPath.split('elm.json')[0]

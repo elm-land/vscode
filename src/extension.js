@@ -13,6 +13,7 @@ async function activate(context) {
 
   // Attempt to find an elm.json file at the project root
   await autodetectElmJson(globalState)
+  vscode.workspace.onDidChangeWorkspaceFolders(async () => await autodetectElmJson(globalState))
 
   // Run `elm-format` when a file is saved
   vscode.languages.registerDocumentFormattingEditProvider('elm', elmFormatOnSave)
@@ -21,8 +22,9 @@ async function activate(context) {
   vscode.languages.registerInlineCompletionItemProvider('elm', inlineAutocomplete(globalState))
 
   // Show inline compiler errors anytime a file is saved or opened
-  vscode.workspace.onDidOpenTextDocument(errorHighlighting(globalState, diagnostics))
-  vscode.workspace.onDidSaveTextDocument(errorHighlighting(globalState, diagnostics))
+  vscode.workspace.onDidOpenTextDocument(document => errorHighlighting(globalState, diagnostics, document, 'open'))
+  vscode.workspace.onDidSaveTextDocument(document => errorHighlighting(globalState, diagnostics, document, 'save'))
+  // vscode.workspace.onDidChangeTextDocument(({ document }) => errorHighlighting(globalState, diagnostics, document, 'edit'))
   context.subscriptions.push(diagnostics)
 }
 

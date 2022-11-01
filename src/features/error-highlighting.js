@@ -1,40 +1,35 @@
 const child_process = require('child_process')
+const path = require('path')
 const vscode = require('vscode')
 
 
 
-module.exports = (globalState, collection) => async (document) => {
+module.exports = async (globalState, collection, document, event) => {
   let uri = vscode.Uri.file(document.fileName.split('.git')[0])
   let elmJsonFile = findElmJsonFor(globalState, uri)
 
   let compileElmFile = async (elmJsonFile, elmFilesToCompile) => {
     const error = await Elm.compile({ elmJsonFile, elmFilesToCompile })
-    let filesWithErrors = []
+
     if (error) {
-      const items = Elm.toDiagnostics({ error })
+      const items = Elm.toDiagnostics(elmJsonFile, { error })
       for (var item of items) {
         let { fsPath, diagnostics } = item
-        filesWithErrors.push(fsPath)
         collection.set(vscode.Uri.file(fsPath), diagnostics)
       }
     }
-    return filesWithErrors
+
   }
 
+  // Remove stale errors
+  collection.clear()
+
   if (elmJsonFile) {
-    let elmFilesToCompile =
-      (elmJsonFile.entrypoints.length > 0)
-        ? elmJsonFile.entrypoints.concat([uri.fsPath])
-        : [uri.fsPath]
+    let entrypoints = await verifyEntrypointExists(elmJsonFile.entrypoints)
+    let elmFilesToCompile = entrypoints.concat([uri.fsPath])
 
-    let fsPathsWithErrors = await compileElmFile(elmJsonFile, elmFilesToCompile)
+    await compileElmFile(elmJsonFile, elmFilesToCompile)
 
-    // Remove stale errors
-    collection.forEach(uri => {
-      if (fsPathsWithErrors.includes(uri.fsPath) === false) {
-        collection.set(uri, undefined)
-      }
-    })
   } else {
     console.error(`Couldn't find an elm.json file for ${uri.fsPath}`)
   }
@@ -66,7 +61,18 @@ const Elm = {
                 return resolve(
                   { kind: 'compile-errors', errors: json.errors }
                 )
+              case 'error':
+                console.error({ json })
+                return resolve(
+                  {
+                    kind: 'error',
+                    title: json.title,
+                    path: json.path,
+                    message: json.message
+                  }
+                )
               default:
+                console.error({ json })
                 throw new Error("Unhandled error type: " + json.type)
             }
           } catch (ex) {
@@ -80,8 +86,26 @@ const Elm = {
     return promise
   },
 
-  toDiagnostics: (input) => {
+  toDiagnostics: (elmJsonFile, input) => {
     switch (input.error.kind) {
+      case 'error':
+        return [
+          {
+            fsPath: input.error.path
+              ? path.join(elmJsonFile.projectFolder, input.error.path)
+              : elmJsonFile.uri.fsPath,
+            diagnostics: [
+              {
+                severity: vscode.DiagnosticSeverity.Error,
+                range: {
+                  start: new vscode.Position(0, 0),
+                  end: new vscode.Position(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)
+                },
+                message: Elm.formatErrorMessage(input.error.title, input.error.message)
+              }
+            ]
+          }
+        ]
       case 'compile-errors':
         return input.error.errors.flatMap(error => {
           const problems = error.problems
@@ -122,6 +146,20 @@ const Elm = {
   }
 }
 
-const isCaseInsensitiveMatch = (a, b) => {
-  return a.toLowerCase() === b.toLowerCase()
+const verifyEntrypointExists = async (entrypoints) => {
+  let files = await Promise.all(entrypoints.map(verifyFileExists))
+  return files.filter(a => a)
+}
+
+const verifyFileExists = async (fsPath) => {
+  try {
+    let stats = await vscode.workspace.fs.stat(vscode.Uri.file(fsPath))
+    if (stats.size > 0) {
+      return fsPath
+    } else {
+      return undefined
+    }
+  } catch (_) {
+    return undefined
+  }
 }
