@@ -5,7 +5,7 @@ const elmFormatOnSave = require('./features/elm-format-on-save')
 const errorHighlighting = require('./features/error-highlighting')
 const inlineAutocomplete = require('./features/inline-autocomplete')
 
-let diagnostics = vscode.languages.createDiagnosticCollection('elm')
+let diagnostics = vscode.languages.createDiagnosticCollection('elmLand')
 
 async function activate(context) {
   console.log("ACTIVATE")

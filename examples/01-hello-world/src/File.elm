@@ -9,3 +9,8 @@ type File
 thing : File
 thing =
     File ()
+
+
+what : String
+what =
+    123

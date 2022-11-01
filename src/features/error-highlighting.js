@@ -89,7 +89,6 @@ const Elm = {
           let diagnostics = problems.map(problem => {
             const diagnostic = {
               severity: vscode.DiagnosticSeverity.Error,
-              source: 'Elm',
               range: {
                 start: Elm.fromErrorLocation(problem.region.start),
                 end: Elm.fromErrorLocation(problem.region.end)
