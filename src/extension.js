@@ -1,6 +1,5 @@
 const vscode = require('vscode')
 const autodetectElmJson = require('./features/autodetect-elm-json')
-
 const elmFormatOnSave = require('./features/elm-format-on-save')
 const errorHighlighting = require('./features/error-highlighting')
 const inlineAutocomplete = require('./features/inline-autocomplete')
@@ -19,7 +18,7 @@ async function activate(context) {
   vscode.languages.registerDocumentFormattingEditProvider('elm', elmFormatOnSave)
 
   // Provide inline autocomplete suggestions
-  vscode.languages.registerInlineCompletionItemProvider('elm', inlineAutocomplete)
+  vscode.languages.registerInlineCompletionItemProvider('elm', inlineAutocomplete(globalState))
 
   // Show inline compiler errors anytime a file is saved or opened
   vscode.workspace.onDidOpenTextDocument(errorHighlighting(globalState, diagnostics))

@@ -1,6 +1,6 @@
 module Person exposing (Person)
 
-import Fart
+import Browser.Navigation
 
 
 type alias Person =
