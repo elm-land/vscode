@@ -1,3 +1,9 @@
+# These will be ignored when
+# packaging the VS code plugin
 .vscode
 examples
 node_modules
+dist
+elm-stuff
+/src/elm-to-ast/src
+/src/elm-to-ast/README.md
