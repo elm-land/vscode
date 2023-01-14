@@ -1,10 +1,23 @@
 const vscode = require('vscode')
 const sharedLogic = require('./_shared-logic')
-const ElmToAst = require('../elm-to-ast/index.js')
+const ElmToAst = require('./elm-to-ast/index.js')
 
 // VS code has zero-based ranges and positions, so we need to decrement all values
 // returned from ElmToAst so they work with the code editor
 const fromElmRange = (array) => new vscode.Range(...array.map(x => x - 1))
+
+const getNameFromDeclaration = (declaration) => {
+  let declarationType = declaration.value.type
+  if (declarationType === 'typedecl') {
+    return declaration.value.typedecl.name.value
+  } else if (declarationType === 'function') {
+    return declaration.value.function.signature.value.name.value
+  } else if (declarationType === 'typeAlias') {
+    return declaration.value.typeAlias.name.value
+  } else {
+    console.error('provideDefinition:error:unknownDeclarationType', declaration)
+  }
+}
 
 module.exports = (globalState) => {
   return {
@@ -38,10 +51,35 @@ module.exports = (globalState) => {
             return localFileUri
           }
 
-          // Check if this is an "import"
+          // Add links to exported members of the current module
+          let exposingList = ast.moduleDefinition.value.normal.exposingList
+
+          if (exposingList.value.type === 'explicit') {
+            let explictExports = exposingList.value.explicit
+            for (let export_ of explictExports) {
+              let range = fromElmRange(export_.range)
+              if (range.contains(position)) {
+                let type = export_.value.type
+                let name = export_.value[type].name
+
+                for (let declaration of ast.declarations) {
+                  let declarationName = getNameFromDeclaration(declaration)
+                  if (declarationName === name) {
+                    console.info('provideDefinition:module-export:file', `${Date.now() - start}ms`)
+                    return new vscode.Location(
+                      document.uri,
+                      fromElmRange(declaration.range)
+                    )
+                  }
+                }
+              }
+            }
+          }
+
+
           for (let import_ of ast.imports) {
 
-            // Add any links to locally imported files
+            // Add any links to locally imported modules
             let range = fromElmRange(import_.value.moduleName.range)
             if (range.contains(position)) {
               const moduleNameNode = import_.value.moduleName
@@ -82,15 +120,12 @@ module.exports = (globalState) => {
                   // Check if module is a local project file
                   let fileUri = await findLocalProjectFileUri(moduleName)
                   if (fileUri) {
-                    console.log('in local file', name)
+
                     let otherDocument = await vscode.workspace.openTextDocument(fileUri)
                     let otherAst = await ElmToAst.run(otherDocument.getText())
-                    console.log(otherAst.declarations[0])
                     const topOfFileRange = otherAst.moduleDefinition.value.normal.moduleName.range
                     for (let declaration of otherAst.declarations) {
-                      let declarationType = declaration.value.type
-                      let declarationName = declaration.value[declarationType].name.value
-                      console.log(declarationName)
+                      let declarationName = getNameFromDeclaration(declaration)
                       if (declarationName === name) {
                         console.info('provideDefinition:exposing:file', `${Date.now() - start}ms`)
                         return new vscode.Location(
