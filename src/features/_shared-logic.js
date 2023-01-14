@@ -1,4 +1,4 @@
-
+const vscode = require('vscode')
 
 let findElmJsonFor = (globalState, uri) => {
   let filepath = uri.fsPath
@@ -12,6 +12,18 @@ let findElmJsonFor = (globalState, uri) => {
   }
 }
 
+const getMappingOfPackageNamesToUris = (elmJsonFile) => {
+  let packages = {}
+  const dependencies = elmJsonFile.dependencies
+  for (let dep of dependencies) {
+    for (let doc of dep.docs) {
+      packages[doc.name] = vscode.Uri.parse(`https://package.elm-lang.org/packages/${dep.packageUserAndName}/${dep.packageVersion}/${doc.name.split('.').join('-')}`)
+    }
+  }
+  return packages
+}
+
 module.exports = {
-  findElmJsonFor
+  findElmJsonFor,
+  getMappingOfPackageNamesToUris
 }

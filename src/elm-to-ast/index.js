@@ -18,7 +18,6 @@ const run = async (rawElmSource) => {
 
     app.ports.onSuccess.subscribe(resolve)
     app.ports.onFailure.subscribe(reason => {
-      console.error(`ElmToAst`, reason)
       resolve(undefined)
     })
   })
