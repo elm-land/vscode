@@ -35,10 +35,16 @@ async function activate(context) {
   //   vscode.languages.registerInlineCompletionItemProvider('elm', inlineAutocomplete(globalState))
   // )
 
+
   // Provide jump-to-definition behavior
+  const jumpToDefinitionProvider = jumpToDefinition(globalState)
   context.subscriptions.push(
-    vscode.languages.registerDocumentLinkProvider('elm', jumpToDefinition(globalState))
+    vscode.languages.registerDocumentLinkProvider('elm', jumpToDefinitionProvider)
   )
+  context.subscriptions.push(
+    vscode.languages.registerDefinitionProvider('elm', jumpToDefinitionProvider)
+  )
+
 
   // Show inline compiler errors anytime a file is saved or opened
   context.subscriptions.push(
