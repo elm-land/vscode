@@ -11,7 +11,7 @@ module.exports = async (globalState) => {
   let elmJsonFileUris = await vscode.workspace.findFiles('elm.json')
 
   globalState.elmJsonFiles = await Promise.all(elmJsonFileUris.map(async uri => {
-    let projectFolder = uri.fsPath.split('elm.json')[0]
+    let [projectFolder, _] = uri.fsPath.split('elm.json')
     let toAbsolutePath = (relativePath) => path.join(projectFolder, relativePath)
     // Reading JSON file contents
     let buffer = await vscode.workspace.fs.readFile(uri)

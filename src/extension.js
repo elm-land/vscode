@@ -3,33 +3,51 @@ const autodetectElmJson = require('./features/autodetect-elm-json')
 const elmFormatOnSave = require('./features/elm-format-on-save')
 const errorHighlighting = require('./features/error-highlighting')
 const inlineAutocomplete = require('./features/inline-autocomplete')
+const jumpToDefinition = require('./features/jump-to-definition')
 
-let diagnostics = vscode.languages.createDiagnosticCollection('elmLand')
+const pluginId = `elmLand`
+let diagnostics = vscode.languages.createDiagnosticCollection(pluginId)
 
 async function activate(context) {
   console.log("ACTIVATE")
 
+  // Global context available to functions below
   let globalState = { elmJsonFiles: [] }
+  context.subscriptions.push({
+    dispose: () => { globalState = undefined }
+  })
 
   // Attempt to find an elm.json file at the project root
   await autodetectElmJson(globalState)
-  vscode.workspace.onDidChangeWorkspaceFolders(async () => await autodetectElmJson(globalState))
 
-  // Run `elm-format` when a file is saved
-  vscode.languages.registerDocumentFormattingEditProvider('elm', elmFormatOnSave)
+  // If user changes the current folder, look for the "elm.json" file again
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeWorkspaceFolders(async () => await autodetectElmJson(globalState))
+  )
+
+  // Run `elm-format` when any Elm file is saved
+  context.subscriptions.push(
+    vscode.languages.registerDocumentFormattingEditProvider('elm', elmFormatOnSave)
+  )
 
   // Provide inline autocomplete suggestions
-  vscode.languages.registerInlineCompletionItemProvider('elm', inlineAutocomplete(globalState))
+  // context.subscriptions.push(
+  //   vscode.languages.registerInlineCompletionItemProvider('elm', inlineAutocomplete(globalState))
+  // )
+
+  // Provide jump-to-definition behavior
+  context.subscriptions.push(
+    vscode.languages.registerDocumentLinkProvider('elm', jumpToDefinition(globalState))
+  )
 
   // Show inline compiler errors anytime a file is saved or opened
-  vscode.workspace.onDidOpenTextDocument(document => errorHighlighting(globalState, diagnostics, document, 'open'))
-  vscode.workspace.onDidSaveTextDocument(document => errorHighlighting(globalState, diagnostics, document, 'save'))
-  // vscode.workspace.onDidChangeTextDocument(({ document }) => errorHighlighting(globalState, diagnostics, document, 'edit'))
+  context.subscriptions.push(
+    vscode.workspace.onDidOpenTextDocument(document => errorHighlighting(globalState, diagnostics, document, 'open'))
+  )
+  context.subscriptions.push(
+    vscode.workspace.onDidSaveTextDocument(document => errorHighlighting(globalState, diagnostics, document, 'save'))
+  )
   context.subscriptions.push(diagnostics)
-}
-
-function onChange() {
-
 }
 
 function deactivate() {

@@ -2,3 +2,4 @@ node_modules
 dist
 elm-stuff
 *.tsbuildinfo
+package-lock.json

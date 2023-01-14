@@ -3,7 +3,7 @@
   "displayName": "Elm Land",
   "description": "A minimal plugin for Elm",
   "version": "0.0.1",
-  "icon": "https://elm.land/icon.png",
+  "icon": "src/icon.png",
   "publisher": "elm-land",
   "repository": "https://github.com/elm-land/vscode",
   "engines": {
