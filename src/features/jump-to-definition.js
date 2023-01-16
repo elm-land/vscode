@@ -6,6 +6,8 @@ const ElmToAst = require('./elm-to-ast/index.js')
 // returned from ElmToAst so they work with the code editor
 const fromElmRange = (array) => new vscode.Range(...array.map(x => x - 1))
 
+let isFirstLetterLowerCase = (word) => word.charAt(0).toLowerCase() === word.charAt(0)
+
 module.exports = (globalState) => {
   return {
     async provideDefinition(doc, position, token) {
@@ -425,13 +427,17 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
       }
     }
 
-    // Check for any function declarations
-    let matchingLocation = await findLocationOfDeclarationForModuleName({ doc, ast, moduleName: name })
-    if (matchingLocation) return matchingLocation
+    if (isFirstLetterLowerCase(name)) {
+      // Check for any function declarations
+      let matchingLocation = await findLocationOfDeclarationForModuleName({ doc, ast, moduleName: name })
+      if (matchingLocation) return matchingLocation
+    } else {
+      // Check for any custom type variants
+      let matchingLocation = await findLocationOfCustomTypeVariantForModuleName({ doc, ast, moduleName: name })
+      if (matchingLocation) return matchingLocation
+    }
 
-    // Check for any custom type variants
-    matchingLocation = await findLocationOfCustomTypeVariantForModuleName({ doc, ast, moduleName: name })
-    if (matchingLocation) return matchingLocation
+
   }
 
   const findLocationOfItemsForExpression = async (expression, args, localDeclarations) => {
