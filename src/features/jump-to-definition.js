@@ -379,6 +379,15 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
 
       let matchingLocation = await findLocationForTypeAnnotation(typeAnnotation)
       if (matchingLocation) return matchingLocation
+    } else if (declaration.value.type === 'typedecl') {
+      let variantArguments =
+        declaration.value.typedecl.constructors
+          .flatMap(variant => variant.value.arguments)
+
+      for (var customTypeVariantArg of variantArguments) {
+        let matchingLocation = await findLocationForTypeAnnotation(customTypeVariantArg.value)
+        if (matchingLocation) return matchingLocation
+      }
     } else {
       console.error(`provideDefinition:error:unhandledDeclarationType`, declaration.value)
     }
