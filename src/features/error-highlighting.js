@@ -6,32 +6,35 @@ const vscode = require('vscode')
 
 module.exports = async (globalState, collection, document, event) => {
   let uri = vscode.Uri.file(document.fileName.split('.git')[0])
-  let elmJsonFile = findElmJsonFor(globalState, uri)
 
-  let compileElmFile = async (elmJsonFile, elmFilesToCompile) => {
-    const error = await Elm.compile({ elmJsonFile, elmFilesToCompile })
+  if (uri.fsPath && uri.fsPath.endsWith('.elm')) {
+    let elmJsonFile = findElmJsonFor(globalState, uri)
 
-    if (error) {
-      const items = Elm.toDiagnostics(elmJsonFile, { error })
-      for (var item of items) {
-        let { fsPath, diagnostics } = item
-        collection.set(vscode.Uri.file(fsPath), diagnostics)
+    let compileElmFile = async (elmJsonFile, elmFilesToCompile) => {
+      const error = await Elm.compile({ elmJsonFile, elmFilesToCompile })
+
+      if (error) {
+        const items = Elm.toDiagnostics(elmJsonFile, { error })
+        for (var item of items) {
+          let { fsPath, diagnostics } = item
+          collection.set(vscode.Uri.file(fsPath), diagnostics)
+        }
       }
+
     }
 
-  }
+    // Remove stale errors
+    collection.clear()
 
-  // Remove stale errors
-  collection.clear()
+    if (elmJsonFile) {
+      let entrypoints = await verifyEntrypointExists(elmJsonFile.entrypoints)
+      let elmFilesToCompile = entrypoints.concat([uri.fsPath])
 
-  if (elmJsonFile) {
-    let entrypoints = await verifyEntrypointExists(elmJsonFile.entrypoints)
-    let elmFilesToCompile = entrypoints.concat([uri.fsPath])
+      await compileElmFile(elmJsonFile, elmFilesToCompile)
 
-    await compileElmFile(elmJsonFile, elmFilesToCompile)
-
-  } else {
-    console.error(`Couldn't find an elm.json file for ${uri.fsPath}`)
+    } else {
+      console.error(`Couldn't find an elm.json file for ${uri.fsPath}`)
+    }
   }
 }
 

@@ -6,7 +6,47 @@ const ElmToAst = require('./elm-to-ast/index.js')
 // returned from ElmToAst so they work with the code editor
 const fromElmRange = (array) => new vscode.Range(...array.map(x => x - 1))
 
-let isFirstLetterLowerCase = (word) => word.charAt(0).toLowerCase() === word.charAt(0)
+
+const findFirstOccurenceOfWordInFile = (word, rawJsonString) => {
+  const regex = new RegExp(word, 'm')
+  const match = rawJsonString.match(regex)
+  if (match) {
+    // line number starts from 1
+    const lineNumber = rawJsonString.substring(0, match.index).split('\n').length
+    // column number starts from 1
+    const columnNumber = match.index - rawJsonString.lastIndexOf('\n', match.index)
+    return [lineNumber, columnNumber, lineNumber, columnNumber + word.length]
+  } else {
+    return null
+  }
+
+}
+
+const findLinkToPackageDocs = async ({ packages, moduleName, typeOrValueName }) => {
+  let pathToDocsJson = packages[moduleName]
+  if (pathToDocsJson) {
+    let uri = vscode.Uri.file(pathToDocsJson)
+
+    // Find range of word
+    let otherDoc = await vscode.workspace.openTextDocument(uri)
+    let rawJsonString = otherDoc.getText()
+
+    let wordToFind = typeOrValueName || moduleName
+    let range = findFirstOccurenceOfWordInFile(wordToFind, rawJsonString)
+
+    // Add metadata to request
+    let params = new URLSearchParams()
+    params.set('pathToDocsJson', pathToDocsJson)
+    params.set('moduleName', moduleName)
+    params.set('typeOrValue', typeOrValueName)
+    uri.query = params.toString()
+
+    return new vscode.Location(
+      uri,
+      fromElmRange(range || [1, 1, 1, 1])
+    )
+  }
+}
 
 module.exports = (globalState) => {
   return {
@@ -27,59 +67,22 @@ module.exports = (globalState) => {
           }
 
           // Handle module imports
-          let packages = sharedLogic.getMappingOfPackageNamesToUris(elmJsonFile)
-          matchingLocation = await handleJumpToLinksForImports({ position, start, ast, elmJsonFile, packages })
+          let packages = sharedLogic.getMappingOfPackageNameToDocJsonFilepath(elmJsonFile)
+          matchingLocation = await handleJumpToLinksForImports({ position, ast, elmJsonFile, packages })
           if (matchingLocation) {
             console.info('provideDefinition:imports', `${Date.now() - start}ms`)
             return matchingLocation
           }
 
           // Handle module declarations
-          matchingLocation = await handleJumpToLinksForDeclarations({ position, start, ast, doc, elmJsonFile })
+          matchingLocation = await handleJumpToLinksForDeclarations({ position, start, ast, doc, elmJsonFile, packages })
           if (matchingLocation) {
             console.info('provideDefinition:declaration', `${Date.now() - start}ms`)
             return matchingLocation
           }
         }
       }
-    },
-
-    async provideDocumentLinks(doc, token) {
-      const start = Date.now()
-      const links = []
-      const elmJsonFile = sharedLogic.findElmJsonFor(globalState, doc.uri)
-
-      // If we find an elm.json file, we should scan its dependencies
-      // and get nice links to the package docation
-      if (elmJsonFile) {
-        // Scan elm.json for packages
-        let packages = sharedLogic.getMappingOfPackageNamesToUris(elmJsonFile)
-
-        const text = doc.getText()
-        const ast = await ElmToAst.run(text)
-
-        if (ast) {
-          // Add links to all package imports
-          for (let import_ of ast.imports) {
-            const moduleNameNode = import_.value.moduleName
-            const moduleName = moduleNameNode.value.join('.')
-            const packageUri = packages[moduleName]
-
-            if (packageUri) {
-              links.push(
-                new vscode.DocumentLink(
-                  fromElmRange(moduleNameNode.range),
-                  packageUri
-                )
-              )
-            }
-          }
-        }
-      }
-
-      console.info('provideDocumentLinks', `${Date.now() - start}ms`)
-      return links
-    },
+    }
   }
 }
 
@@ -107,7 +110,8 @@ const handleJumpToLinksForModuleDefinition = ({ doc, position, start, ast }) => 
   }
 }
 
-const handleJumpToLinksForImports = async ({ position, start, ast, elmJsonFile, packages }) => {
+const handleJumpToLinksForImports = async ({ position, ast, elmJsonFile, packages }) => {
+
   for (let import_ of ast.imports) {
 
     // Add any links to locally imported modules
@@ -125,6 +129,13 @@ const handleJumpToLinksForImports = async ({ position, start, ast, elmJsonFile, 
           fromElmRange(otherAst.moduleDefinition.value.normal.moduleName.range)
         )
       }
+
+      // Check if this is from an Elm package
+      let linkToPackageDocs = await findLinkToPackageDocs({
+        packages,
+        moduleName
+      })
+      if (linkToPackageDocs) return linkToPackageDocs
     }
 
     // Check if user is hovering over an exposed import value
@@ -139,12 +150,13 @@ const handleJumpToLinksForImports = async ({ position, start, ast, elmJsonFile, 
           const moduleNameNode = import_.value.moduleName.value.join('.')
           const moduleName = moduleNameNode
 
-          // Check if module is from an Elm package
-          let packageUri = packages[moduleName]
-          if (packageUri) {
-
-            return // TODO: Make this link to the docs preview pane?
-          }
+          // Check if this is from an Elm package
+          let linkToPackageDocs = await findLinkToPackageDocs({
+            packages,
+            moduleName,
+            typeOrValueName: name
+          })
+          if (linkToPackageDocs) return linkToPackageDocs
 
           // Check if module is a local project file
           let fileUri = await findLocalProjectFileUri(elmJsonFile, moduleName)
@@ -175,7 +187,7 @@ const handleJumpToLinksForImports = async ({ position, start, ast, elmJsonFile, 
   }
 }
 
-const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elmJsonFile }) => {
+const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFile, packages }) => {
   // Need to build up a collection of which types and values
   // are being exposed by all imports.
   // (This will be useful later when jumping to definitions)
@@ -286,8 +298,6 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
     return false
   }
 
-
-
   const isDeclarationExposedFromModule = isItemExposedFromModule({
     isExplicitItemExposed: isDeclarationExposed
   })
@@ -296,16 +306,15 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
     isExplicitItemExposed: isCustomTypeVariantExposed
   })
 
-  const findLocationOfDeclarationFromImportedFiles =
-    findLocationOfItemFromImportedFiles({
-      findItemWithName: findDeclarationWithName,
-      isItemExposedFromModule: isDeclarationExposedFromModule
-    })
-  const findLocationOfCustomTypeVariantFromImportedFiles =
-    findLocationOfItemFromImportedFiles({
-      findItemWithName: findCustomTypeVariantWithName,
-      isItemExposedFromModule: isCustomTypeVariantExposedFromModule
-    })
+  const findLocationOfDeclarationFromImportedFiles = findLocationOfItemFromImportedFiles({
+    findItemWithName: findDeclarationWithName,
+    isItemExposedFromModule: isDeclarationExposedFromModule
+  })
+
+  const findLocationOfCustomTypeVariantFromImportedFiles = findLocationOfItemFromImportedFiles({
+    findItemWithName: findCustomTypeVariantWithName,
+    isItemExposedFromModule: isCustomTypeVariantExposedFromModule
+  })
 
   const findLocationOfItemForModuleName = ({ findItemWithName, findLocationOfItem }) =>
     async ({ doc, ast, moduleName }) => {
@@ -325,8 +334,19 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
 
         let otherModuleNamesToCheck = findImportedModuleNamesThatMightHaveExposedThisValue(moduleName) || []
 
+        // Check local project files
         let matchingLocation = await findLocationOfItem(otherModuleNamesToCheck, name)
         if (matchingLocation) return matchingLocation
+
+        // Check installed Elm packages
+        for (var moduleName of otherModuleNamesToCheck) {
+          let linkToPackageDocs = await findLinkToPackageDocs({
+            packages,
+            moduleName,
+            typeOrValueName: name
+          })
+          if (linkToPackageDocs) return linkToPackageDocs
+        }
       } else {
         // Example: If a user clicked on "Html.Attributes.Attribute", this
         // would return "Html.Attributes"
@@ -335,22 +355,32 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
         let aliases = aliasMappingToModuleNames[parentModuleName] || []
         let moduleNamesToCheck = [parentModuleName].concat(aliases)
 
+        // Check local project files
         let matchingLocation = await findLocationOfItem(moduleNamesToCheck, name)
         if (matchingLocation) return matchingLocation
+
+        // Check installed Elm packages
+        for (var moduleName of moduleNamesToCheck) {
+          let linkToPackageDocs = await findLinkToPackageDocs({
+            packages,
+            moduleName,
+            typeOrValueName: name
+          })
+          if (linkToPackageDocs) return linkToPackageDocs
+        }
+
       }
     }
 
-  const findLocationOfCustomTypeVariantForModuleName =
-    findLocationOfItemForModuleName({
-      findItemWithName: findCustomTypeVariantWithName,
-      findLocationOfItem: findLocationOfCustomTypeVariantFromImportedFiles,
-    })
+  const findLocationOfCustomTypeVariantForModuleName = findLocationOfItemForModuleName({
+    findItemWithName: findCustomTypeVariantWithName,
+    findLocationOfItem: findLocationOfCustomTypeVariantFromImportedFiles,
+  })
 
-  const findLocationOfDeclarationForModuleName =
-    findLocationOfItemForModuleName({
-      findItemWithName: findDeclarationWithName,
-      findLocationOfItem: findLocationOfDeclarationFromImportedFiles,
-    })
+  const findLocationOfDeclarationForModuleName = findLocationOfItemForModuleName({
+    findItemWithName: findDeclarationWithName,
+    findLocationOfItem: findLocationOfDeclarationFromImportedFiles,
+  })
 
   const findLocationOfCustomTypeForPattern = async (pattern, range) => {
     if (['var', 'all', 'unit', 'char', 'string', 'int', 'hex', 'float', 'record'].includes(pattern.type)) {
@@ -404,7 +434,7 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
     }
   }
 
-  const findLocationForExpressionWithName = async ({ args, name, localDeclarations }) => {
+  const findLocationForExpressionWithName = async ({ name, args, localDeclarations }) => {
     // Check for if in current function's argument list
     for (let argument of args) {
       let matchingArgument = findArgumentWithMatchingName({ argument, name })
@@ -427,17 +457,27 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
       }
     }
 
-    if (isFirstLetterLowerCase(name)) {
-      // Check for any function declarations
-      let matchingLocation = await findLocationOfDeclarationForModuleName({ doc, ast, moduleName: name })
-      if (matchingLocation) return matchingLocation
-    } else {
-      // Check for any custom type variants
-      let matchingLocation = await findLocationOfCustomTypeVariantForModuleName({ doc, ast, moduleName: name })
-      if (matchingLocation) return matchingLocation
+    // Check for any custom type variants
+    let matchingLocation = await findLocationOfCustomTypeVariantForModuleName({ doc, ast, moduleName: name })
+    if (matchingLocation) return matchingLocation
+
+    // Check for any function declarations
+    matchingLocation = await findLocationOfDeclarationForModuleName({ doc, ast, moduleName: name })
+    if (matchingLocation) return matchingLocation
+
+    // Check if this is from an Elm package
+    let moduleName = name.split('.').slice(0, -1)
+    let typeOrValueName = name.split('.').slice(-1)[0]
+
+    if (moduleName) {
+      // Check if this is from an Elm package
+      let linkToPackageDocs = findLinkToPackageDocs({
+        packages,
+        moduleName,
+        typeOrValueName: typeOrValueName
+      })
+      if (linkToPackageDocs) return linkToPackageDocs
     }
-
-
   }
 
   const findLocationOfItemsForExpression = async (expression, args, localDeclarations) => {
@@ -522,7 +562,12 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
       // Try to link the the part before the "|"
       let range = fromElmRange(expression.recordUpdate.name.range)
       if (range.contains(position)) {
-        return findLocationForExpressionWithName({ args, name: expression.recordUpdate.name.value, localDeclarations })
+        return findLocationForExpressionWithName({
+          name: expression.recordUpdate.name.value,
+          args,
+          localDeclarations,
+          packages
+        })
       }
 
       // Try to link to items within expression
@@ -557,7 +602,8 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
           return findLocationForFunctionDeclaration(
             declaration,
             args,
-            newLocalDeclarations
+            newLocalDeclarations,
+            packages
           )
         }
       }
@@ -599,18 +645,6 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
     } else {
       console.error('provideDefinition:error:unhandledArgumentPattern', argument.value)
     }
-    //   [
-    //     'var',
-    //     'all',
-    //     'unit',
-    //     'char',
-    //     'string', 'int', 'hex', 'float', 'record'
-    //   'parentisized'
-    //   'named'
-    //   'uncons'
-    //   'list'
-    //   'as'
-    // ]
   }
 
   const findLocationForTypeAnnotation = async (typeAnnotation) => {
@@ -619,10 +653,11 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
 
       let range = fromElmRange(moduleNameAndName.range)
       if (range.contains(position)) {
+        let moduleName = getNameFromModuleNameAndName(moduleNameAndName)
         let matchingLocation = await findLocationOfDeclarationForModuleName({
           doc,
           ast,
-          moduleName: getNameFromModuleNameAndName(moduleNameAndName)
+          moduleName
         })
 
         if (matchingLocation) {
@@ -713,7 +748,8 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
       let matchingLocation = await findLocationOfItemsForExpression(
         func.declaration.value.expression.value,
         existingArgs.concat(args),
-        localDeclarations
+        localDeclarations,
+        packages
       )
       if (matchingLocation) return matchingLocation
     }
@@ -766,6 +802,7 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
     let range = fromElmRange(declaration.range)
     if (range.contains(position)) {
       if (declaration.value.type === 'function') {
+
         return findLocationForFunctionDeclaration(declaration, [], [])
       } else if (declaration.value.type === 'typeAlias') {
         let typeAnnotation = declaration.value.typeAlias.typeAnnotation.value

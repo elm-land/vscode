@@ -36,17 +36,18 @@ module.exports = async (globalState) => {
         let buffer = await vscode.workspace.fs.readFile(vscode.Uri.file(fsPath))
         let contents = Buffer.from(buffer).toString('utf8')
         let json = JSON.parse(contents)
-        return json
+        return { fsPath, docs: json }
       }
 
       dependencies =
         await Promise.all(
           Object.entries(elmJson['dependencies']['direct'])
             .map(async ([packageUserAndName, packageVersion]) => {
-              let docs = await toDocsJson(packageUserAndName, packageVersion)
+              let { fsPath, docs } = await toDocsJson(packageUserAndName, packageVersion)
               return {
                 packageUserAndName,
                 packageVersion,
+                fsPath,
                 docs
               }
             })

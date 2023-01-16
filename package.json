@@ -40,6 +40,18 @@
         }
       }
     ],
+    "customEditors": [
+      {
+        "viewType": "elmLand.packageDocs",
+        "displayName": "Elm Package Docs",
+        "selector": [
+          {
+            "filenamePattern": "**/packages/*/*/*/docs.json"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
     "languages": [
       {
         "id": "elm",

@@ -4,12 +4,13 @@ const elmFormatOnSave = require('./features/elm-format-on-save')
 const errorHighlighting = require('./features/error-highlighting')
 const inlineAutocomplete = require('./features/inline-autocomplete')
 const jumpToDefinition = require('./features/jump-to-definition')
+const offlinePackageDocs = require('./features/offline-package-docs')
 
 const pluginId = `elmLand`
 let diagnostics = vscode.languages.createDiagnosticCollection(pluginId)
 
 async function activate(context) {
-  console.log("ACTIVATE")
+  console.info("ACTIVATE")
 
   // Global context available to functions below
   let globalState = { elmJsonFiles: [] }
@@ -19,6 +20,18 @@ async function activate(context) {
 
   // Attempt to find an elm.json file at the project root
   await autodetectElmJson(globalState)
+
+  // Add command for offline package docs
+  context.subscriptions.push(
+    vscode.window.registerCustomEditorProvider(
+      'elmLand.packageDocs',
+      offlinePackageDocs(globalState),
+      {
+        webviewOptions: { retainContextWhenHidden: true },
+        supportsMultipleEditorsPerDocument: false
+      }
+    )
+  )
 
   // If user changes the current folder, look for the "elm.json" file again
   context.subscriptions.push(
@@ -39,9 +52,6 @@ async function activate(context) {
   // Provide jump-to-definition behavior
   const jumpToDefinitionProvider = jumpToDefinition(globalState)
   context.subscriptions.push(
-    vscode.languages.registerDocumentLinkProvider('elm', jumpToDefinitionProvider)
-  )
-  context.subscriptions.push(
     vscode.languages.registerDefinitionProvider('elm', jumpToDefinitionProvider)
   )
 
@@ -57,7 +67,7 @@ async function activate(context) {
 }
 
 function deactivate() {
-  console.log('DEACTIVATE')
+  console.info('DEACTIVATE')
 }
 
 

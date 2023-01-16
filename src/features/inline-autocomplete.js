@@ -6,8 +6,6 @@ const vscode = require('vscode')
 module.exports = (globalState) => {
   return {
     provideInlineCompletionItems(document, position, context, token) {
-      // TODO: Actually check which one applies to the current document
-      // ( steal logic from the error-highlighting feature! )
       let elmJsonFile = sharedLogic.findElmJsonFor(globalState, document.uri)
       if (elmJsonFile) {
         let plainModuleNames =
