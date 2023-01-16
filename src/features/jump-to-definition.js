@@ -227,7 +227,6 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
   }
 
   const isCustomTypeVariantExposed = (exposingList, itemName, ast) => {
-    console.log(itemName, exposingList)
     for (let item of exposingList) {
       if (item.value.type === 'typeOrAlias') {
         // keep looping
@@ -349,11 +348,11 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
       findLocationOfItem: findLocationOfDeclarationFromImportedFiles,
     })
 
-  const findLocationForPattern = async (pattern, range) => {
-    if (['var', 'all', 'unit', 'char', 'string', 'int', 'hex', 'float'].includes(pattern.type)) {
+  const findLocationOfCustomTypeForPattern = async (pattern, range) => {
+    if (['var', 'all', 'unit', 'char', 'string', 'int', 'hex', 'float', 'record'].includes(pattern.type)) {
       return
     } else if (pattern.type === 'parentisized') {
-      return await findLocationForPattern(pattern.parentisized.value.value, range)
+      return await findLocationOfCustomTypeForPattern(pattern.parentisized.value.value, range)
     } else if (pattern.type === 'named') {
       let moduleName = [...pattern.named.qualified.moduleName, pattern.named.qualified.name].join('.')
 
@@ -367,7 +366,33 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
       }
 
       for (let argument of arguments) {
-        let matchingLocation = await findLocationForPattern(argument.value, fromElmRange(argument.range))
+        let matchingLocation = await findLocationOfCustomTypeForPattern(argument.value, fromElmRange(argument.range))
+        if (matchingLocation) return matchingLocation
+      }
+    } else if (pattern.type === 'uncons') {
+      let left = pattern.uncons.left
+      let right = pattern.uncons.right
+
+      for (let item of [left, right]) {
+        let range = fromElmRange(item.range)
+        if (range.contains(position)) {
+          let matchingLocation = await findLocationOfCustomTypeForPattern(item.value, range)
+          if (matchingLocation) return matchingLocation
+        }
+      }
+    } else if (pattern.type === 'list') {
+      for (let item of pattern.list.value) {
+        let range = fromElmRange(item.range)
+        if (range.contains(position)) {
+          let matchingLocation = await findLocationOfCustomTypeForPattern(item.value, range)
+          if (matchingLocation) return matchingLocation
+        }
+      }
+    } else if (pattern.type === 'as') {
+      let item = pattern.as.pattern
+      let range = fromElmRange(item.range)
+      if (range.contains(position)) {
+        let matchingLocation = await findLocationOfCustomTypeForPattern(item.value, range)
         if (matchingLocation) return matchingLocation
       }
     } else {
@@ -511,7 +536,7 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
         let arguments = func.declaration.value.arguments
 
         for (let argument of arguments) {
-          let matchingLocation = await findLocationForPattern(argument.value, fromElmRange(argument.range))
+          let matchingLocation = await findLocationOfCustomTypeForPattern(argument.value, fromElmRange(argument.range))
           if (matchingLocation) return matchingLocation
         }
 
