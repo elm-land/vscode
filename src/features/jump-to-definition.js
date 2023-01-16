@@ -6,10 +6,6 @@ const ElmToAst = require('./elm-to-ast/index.js')
 // returned from ElmToAst so they work with the code editor
 const fromElmRange = (array) => new vscode.Range(...array.map(x => x - 1))
 
-let info = (message, arg2) => {
-  console.info(message, arg2)
-}
-
 module.exports = (globalState) => {
   return {
     async provideDefinition(doc, position, token) {
@@ -23,16 +19,25 @@ module.exports = (globalState) => {
         if (elmJsonFile) {
           // Handle module definitions
           let matchingLocation = handleJumpToLinksForModuleDefinition({ doc, position, start, elmJsonFile, ast })
-          if (matchingLocation) return matchingLocation
+          if (matchingLocation) {
+            console.info('provideDefinition:moduleDefinition', `${Date.now() - start}ms`)
+            return matchingLocation
+          }
 
           // Handle module imports
           let packages = sharedLogic.getMappingOfPackageNamesToUris(elmJsonFile)
           matchingLocation = await handleJumpToLinksForImports({ position, start, ast, elmJsonFile, packages })
-          if (matchingLocation) return matchingLocation
+          if (matchingLocation) {
+            console.info('provideDefinition:imports', `${Date.now() - start}ms`)
+            return matchingLocation
+          }
 
           // Handle module declarations
           matchingLocation = await handleJumpToLinksForDeclarations({ position, start, ast, doc, elmJsonFile })
-          if (matchingLocation) return matchingLocation
+          if (matchingLocation) {
+            console.info('provideDefinition:declaration', `${Date.now() - start}ms`)
+            return matchingLocation
+          }
         }
       }
     },
@@ -70,7 +75,7 @@ module.exports = (globalState) => {
         }
       }
 
-      info('provideDocumentLinks', `${Date.now() - start}ms`)
+      console.info('provideDocumentLinks', `${Date.now() - start}ms`)
       return links
     },
   }
@@ -90,7 +95,6 @@ const handleJumpToLinksForModuleDefinition = ({ doc, position, start, ast }) => 
         let declaration = findDeclarationWithName(ast, name)
 
         if (declaration) {
-          info('provideDefinition:module-export:file', `${Date.now() - start}ms`)
           return new vscode.Location(
             doc.uri,
             fromElmRange(declaration.range)
@@ -114,7 +118,6 @@ const handleJumpToLinksForImports = async ({ position, start, ast, elmJsonFile, 
       if (fileUri) {
         let otherDocument = await vscode.workspace.openTextDocument(fileUri)
         let otherAst = await ElmToAst.run(otherDocument.getText())
-        info('provideDefinition:import:file', `${Date.now() - start}ms`)
         return new vscode.Location(
           fileUri,
           fromElmRange(otherAst.moduleDefinition.value.normal.moduleName.range)
@@ -137,7 +140,7 @@ const handleJumpToLinksForImports = async ({ position, start, ast, elmJsonFile, 
           // Check if module is from an Elm package
           let packageUri = packages[moduleName]
           if (packageUri) {
-            info('provideDefinition:exposing:package', `${Date.now() - start}ms`)
+
             return // TODO: Make this link to the docs preview pane?
           }
 
@@ -151,14 +154,14 @@ const handleJumpToLinksForImports = async ({ position, start, ast, elmJsonFile, 
             for (let declaration of otherAst.declarations) {
               let declarationName = getNameFromDeclaration(declaration)
               if (declarationName === name) {
-                info('provideDefinition:exposing:file', `${Date.now() - start}ms`)
+
                 return new vscode.Location(
                   fileUri,
                   fromElmRange(declaration.range)
                 )
               }
             }
-            info('provideDefinition:exposing:file', `${Date.now() - start}ms`)
+
             return new vscode.Location(
               fileUri,
               fromElmRange(topOfFileRange)
@@ -195,7 +198,6 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
         let item = findItemWithName(importedAst, moduleName)
 
         if (item && isItemExposedFromModule(importedAst, moduleName)) {
-          info('provideDefinition:function:signature:other-module', `${Date.now() - start}ms`)
           return new vscode.Location(
             importedModuleNameUri,
             fromElmRange(item.range)
@@ -444,7 +446,7 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
       'glsl',
       'recordAccessFunction'
     ].includes(expression.type)) {
-
+      return
     } else if (expression.type === 'application') {
       for (let item of expression.application) {
         let range = fromElmRange(item.range)
@@ -462,8 +464,15 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
       for (let item of items) {
         let range = fromElmRange(item.range)
         if (range.contains(position)) {
-          let matchingLocation = await findLocationOfItemsForExpression(item.value, args, localDeclarations)
-          if (matchingLocation) return matchingLocation
+          return findLocationOfItemsForExpression(item.value, args, localDeclarations)
+        }
+      }
+    } else if (expression.type === 'tupled') {
+      let items = expression.tupled
+      for (let item of items) {
+        let range = fromElmRange(item.range)
+        if (range.contains(position)) {
+          return findLocationOfItemsForExpression(item.value, args, localDeclarations)
         }
       }
     } else if (expression.type === 'record') {
@@ -472,8 +481,7 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
       for (let item of items) {
         let range = fromElmRange(item.range)
         if (range.contains(position)) {
-          let matchingLocation = await findLocationOfItemsForExpression(item.value, args, localDeclarations)
-          if (matchingLocation) return matchingLocation
+          return findLocationOfItemsForExpression(item.value, args, localDeclarations)
         }
       }
     } else if (expression.type === 'case') {
@@ -490,8 +498,7 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
         // The part before the "->"
         let patternRange = fromElmRange(item.pattern.range)
         if (patternRange.contains(position)) {
-          let matchingLocation = await findLocationOfCustomTypeForPattern(item.pattern.value, patternRange)
-          if (matchingLocation) return matchingLocation
+          return findLocationOfCustomTypeForPattern(item.pattern.value, patternRange)
         }
 
         // The expression after the "->"
@@ -517,8 +524,7 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
       for (let item of items) {
         let range = fromElmRange(item.range)
         if (range.contains(position)) {
-          let matchingLocation = await findLocationOfItemsForExpression(item.value, args, localDeclarations)
-          if (matchingLocation) return matchingLocation
+          return findLocationOfItemsForExpression(item.value, args, localDeclarations)
         }
       }
     } else if (expression.type === 'ifBlock') {
@@ -531,8 +537,7 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
       for (let item of items) {
         let range = fromElmRange(item.range)
         if (range.contains(position)) {
-          let matchingLocation = await findLocationOfItemsForExpression(item.value, args, localDeclarations)
-          if (matchingLocation) return matchingLocation
+          return findLocationOfItemsForExpression(item.value, args, localDeclarations)
         }
       }
     } else if (expression.type === 'let') {
@@ -556,9 +561,22 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
       if (range.contains(position)) {
         return findLocationOfItemsForExpression(expression.let.expression.value, args, newLocalDeclarations)
       }
+    } else if (expression.type === 'lambda') {
+      let patterns = expression.lambda.patterns
+
+      for (let pattern of patterns) {
+        let range = fromElmRange(pattern.range)
+        if (range.contains(position)) {
+          return findLocationOfCustomTypeForPattern(pattern.value, range)
+        }
+      }
+
+      let item = expression.lambda.expression
+      let range = fromElmRange(item.range)
+      if (range.contains(position)) {
+        return findLocationOfItemsForExpression(item.value, args, localDeclarations)
+      }
     }
-    // lambda
-    // tupled
 
     else {
       console.error('provideDefinition:error:unhandledExpression', expression)
