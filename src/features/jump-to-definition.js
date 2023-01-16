@@ -352,20 +352,20 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
     if (['var', 'all', 'unit', 'char', 'string', 'int', 'hex', 'float', 'record'].includes(pattern.type)) {
       return
     } else if (pattern.type === 'parentisized') {
-      return await findLocationOfCustomTypeForPattern(pattern.parentisized.value.value, range)
+      return findLocationOfCustomTypeForPattern(pattern.parentisized.value.value, range)
     } else if (pattern.type === 'named') {
       let moduleName = [...pattern.named.qualified.moduleName, pattern.named.qualified.name].join('.')
 
       // Workaround because there's no range information for the qualified
-      let arguments = pattern.named.patterns
-      let isNotOneOfArguments = arguments.every(arg => !fromElmRange(arg.range).contains(position))
+      let args = pattern.named.patterns
+      let isNotOneOfArguments = args.every(arg => !fromElmRange(arg.range).contains(position))
 
       if (range.contains(position) && isNotOneOfArguments) {
         let matchingLocation = await findLocationOfCustomTypeVariantForModuleName({ doc, ast, moduleName })
         if (matchingLocation) return matchingLocation
       }
 
-      for (let argument of arguments) {
+      for (let argument of args) {
         let matchingLocation = await findLocationOfCustomTypeForPattern(argument.value, fromElmRange(argument.range))
         if (matchingLocation) return matchingLocation
       }
@@ -398,6 +398,195 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
     } else {
       console.error('provideDefinition:error:unhandledPattern', pattern)
     }
+  }
+
+  const findLocationForExpressionWithName = async ({ args, name, localDeclarations }) => {
+    // Check for if in current function's argument list
+    for (let argument of args) {
+      let matchingArgument = findArgumentWithMatchingName({ argument, name })
+      if (matchingArgument) {
+        return new vscode.Location(
+          doc.uri,
+          fromElmRange(matchingArgument.range)
+        )
+      }
+    }
+
+    // Check through any locally scoped expressions from a let-in block
+    for (let declaration of localDeclarations) {
+      let declarationName = declaration.value.function.declaration.value.name.value
+      if (declarationName === name) {
+        return new vscode.Location(
+          doc.uri,
+          fromElmRange(declaration.range)
+        )
+      }
+    }
+
+    // Check for any function declarations
+    let matchingLocation = await findLocationOfDeclarationForModuleName({ doc, ast, moduleName: name })
+    if (matchingLocation) return matchingLocation
+
+    // Check for any custom type variants
+    matchingLocation = await findLocationOfCustomTypeVariantForModuleName({ doc, ast, moduleName: name })
+    if (matchingLocation) return matchingLocation
+  }
+
+  const findLocationOfItemsForExpression = async (expression, args, localDeclarations) => {
+    if ([
+      'unit',
+      'hex',
+      'negation',
+      'integer',
+      'float',
+      'literal',
+      'charLiteral',
+      'glsl',
+      'recordAccessFunction'
+    ].includes(expression.type)) {
+
+    } else if (expression.type === 'application') {
+      for (let item of expression.application) {
+        let range = fromElmRange(item.range)
+        if (range.contains(position)) {
+          return findLocationOfItemsForExpression(item.value, args, localDeclarations)
+        }
+      }
+    } else if (expression.type === 'functionOrValue') {
+      let name = [...expression.functionOrValue.moduleName, expression.functionOrValue.name].join('.')
+      return findLocationForExpressionWithName({ name, args, localDeclarations })
+    } else if (expression.type === 'parenthesized') {
+      return findLocationOfItemsForExpression(expression.parenthesized.value, args, localDeclarations)
+    } else if (expression.type === 'list') {
+      let items = expression.list
+      for (let item of items) {
+        let range = fromElmRange(item.range)
+        if (range.contains(position)) {
+          let matchingLocation = await findLocationOfItemsForExpression(item.value, args, localDeclarations)
+          if (matchingLocation) return matchingLocation
+        }
+      }
+    } else if (expression.type === 'record') {
+      let items = expression.record.map(field => field.value.expression)
+
+      for (let item of items) {
+        let range = fromElmRange(item.range)
+        if (range.contains(position)) {
+          let matchingLocation = await findLocationOfItemsForExpression(item.value, args, localDeclarations)
+          if (matchingLocation) return matchingLocation
+        }
+      }
+    } else if (expression.type === 'case') {
+      // Handle the expression between the "case" and "of"
+      let caseOfRange = fromElmRange(expression.case.expression.range)
+      if (caseOfRange.contains(position)) {
+        return findLocationOfItemsForExpression(expression.case.expression.value, args, localDeclarations)
+      }
+
+      // Handle each branch of the case expression
+      let items = expression.case.cases
+
+      for (let item of items) {
+        // The part before the "->"
+        let patternRange = fromElmRange(item.pattern.range)
+        if (patternRange.contains(position)) {
+          let matchingLocation = await findLocationOfCustomTypeForPattern(item.pattern.value, patternRange)
+          if (matchingLocation) return matchingLocation
+        }
+
+        // The expression after the "->"
+        let expressionRange = fromElmRange(item.expression.range)
+        if (expressionRange.contains(position)) {
+          return findLocationOfItemsForExpression(item.expression.value, args, localDeclarations)
+        }
+      }
+    } else if (expression.type === 'recordAccess') {
+      let range = fromElmRange(expression.recordAccess.expression.range)
+      if (range.contains(position)) {
+        return findLocationOfItemsForExpression(expression.recordAccess.expression.value, args, localDeclarations)
+      }
+    } else if (expression.type === 'recordUpdate') {
+      // Try to link the the part before the "|"
+      let range = fromElmRange(expression.recordUpdate.name.range)
+      if (range.contains(position)) {
+        return findLocationForExpressionWithName({ args, name: expression.recordUpdate.name.value, localDeclarations })
+      }
+
+      // Try to link to items within expression
+      let items = expression.recordUpdate.updates.map(update => update.value.expression)
+      for (let item of items) {
+        let range = fromElmRange(item.range)
+        if (range.contains(position)) {
+          let matchingLocation = await findLocationOfItemsForExpression(item.value, args, localDeclarations)
+          if (matchingLocation) return matchingLocation
+        }
+      }
+    } else if (expression.type === 'ifBlock') {
+      let items = [
+        expression.ifBlock.clause,
+        expression.ifBlock.then,
+        expression.ifBlock.else
+      ]
+
+      for (let item of items) {
+        let range = fromElmRange(item.range)
+        if (range.contains(position)) {
+          let matchingLocation = await findLocationOfItemsForExpression(item.value, args, localDeclarations)
+          if (matchingLocation) return matchingLocation
+        }
+      }
+    } else if (expression.type === 'let') {
+      let letDeclarations = expression.let.declarations
+      let newLocalDeclarations = localDeclarations.concat(letDeclarations)
+
+      // Handle declarations between "let" and "in" keywords
+      for (let declaration of letDeclarations) {
+        let range = fromElmRange(declaration.range)
+        if (range.contains(position)) {
+          return findLocationForFunctionDeclaration(
+            declaration,
+            args,
+            newLocalDeclarations
+          )
+        }
+      }
+
+      // Handle expression after the "in" keyword
+      let range = fromElmRange(expression.let.expression.range)
+      if (range.contains(position)) {
+        return findLocationOfItemsForExpression(expression.let.expression.value, args, newLocalDeclarations)
+      }
+    }
+    // lambda
+    // tupled
+
+    else {
+      console.error('provideDefinition:error:unhandledExpression', expression)
+    }
+  }
+
+  const findArgumentWithMatchingName = ({ argument, name }) => {
+    if (['all', 'unit', 'char', 'string', 'int', 'hex', 'float'].includes(argument.value.type)) {
+      return
+    } else if (argument.value.type === 'var') {
+      if (argument.value.var.value === name) {
+        return argument
+      }
+    } else {
+      console.error('provideDefinition:error:unhandledArgumentPattern', argument.value)
+    }
+    //   [
+    //     'var',
+    //     'all',
+    //     'unit',
+    //     'char',
+    //     'string', 'int', 'hex', 'float', 'record'
+    //   'parentisized'
+    //   'named'
+    //   'uncons'
+    //   'list'
+    //   'as'
+    // ]
   }
 
   const findLocationForTypeAnnotation = async (typeAnnotation) => {
@@ -475,6 +664,37 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
     }
   }
 
+  const findLocationForFunctionDeclaration = async (declaration, existingArgs, localDeclarations) => {
+    let func = declaration.value.function
+
+    // Handle function type annotations
+    if (func.signature) {
+      let typeAnnotation = func.signature.value.typeAnnotation.value
+
+      let matchingLocation = await findLocationForTypeAnnotation(typeAnnotation)
+      if (matchingLocation) return matchingLocation
+    }
+
+    // Handle function arguments (Destructuring custom types)
+    let args = func.declaration.value.arguments
+
+    for (let arg of args) {
+      let matchingLocation = await findLocationOfCustomTypeForPattern(arg.value, fromElmRange(arg.range))
+      if (matchingLocation) return matchingLocation
+    }
+
+    // Handle function expression
+    let range = fromElmRange(func.declaration.value.expression.range)
+    if (range.contains(position)) {
+      let matchingLocation = await findLocationOfItemsForExpression(
+        func.declaration.value.expression.value,
+        existingArgs.concat(args),
+        localDeclarations
+      )
+      if (matchingLocation) return matchingLocation
+    }
+  }
+
   for (let import_ of ast.imports) {
     const moduleNameNode = import_.value.moduleName
     const moduleName = moduleNameNode.value.join('.')
@@ -522,24 +742,7 @@ const handleJumpToLinksForDeclarations = async ({ position, start, ast, doc, elm
     let range = fromElmRange(declaration.range)
     if (range.contains(position)) {
       if (declaration.value.type === 'function') {
-        let func = declaration.value.function
-
-        // Handle function type annotations
-        if (func.signature) {
-          let typeAnnotation = func.signature.value.typeAnnotation.value
-
-          let matchingLocation = await findLocationForTypeAnnotation(typeAnnotation)
-          if (matchingLocation) return matchingLocation
-        }
-
-        // Handle function arguments (Destructuring custom types)
-        let arguments = func.declaration.value.arguments
-
-        for (let argument of arguments) {
-          let matchingLocation = await findLocationOfCustomTypeForPattern(argument.value, fromElmRange(argument.range))
-          if (matchingLocation) return matchingLocation
-        }
-
+        return findLocationForFunctionDeclaration(declaration, [], [])
       } else if (declaration.value.type === 'typeAlias') {
         let typeAnnotation = declaration.value.typeAlias.typeAnnotation.value
 
