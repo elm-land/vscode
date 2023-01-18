@@ -1,5 +1,7 @@
 module File exposing (thing)
 
+import Person exposing (Person)
+
 
 type File
     = File ()
@@ -11,6 +13,6 @@ thing =
     File ()
 
 
-what : String
-what =
-    123
+what : Person -> String
+what person =
+    person.name

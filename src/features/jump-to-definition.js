@@ -86,8 +86,9 @@ module.exports = (globalState) => {
   }
 }
 
-const handleJumpToLinksForModuleDefinition = ({ doc, position, start, ast }) => {
-  let exposingList = ast.moduleDefinition.value.normal.exposingList
+const handleJumpToLinksForModuleDefinition = ({ doc, position, ast }) => {
+  const moduleDefinitionType = ast.moduleDefinition.value.type
+  let exposingList = ast.moduleDefinition.value[moduleDefinitionType].exposingList
 
   if (exposingList.value.type === 'explicit') {
     let explictExports = exposingList.value.explicit
@@ -124,9 +125,10 @@ const handleJumpToLinksForImports = async ({ position, ast, elmJsonFile, package
       if (fileUri) {
         let otherDocument = await vscode.workspace.openTextDocument(fileUri)
         let otherAst = await ElmToAst.run(otherDocument.getText())
+        const moduleDefinitionType = otherAst.moduleDefinition.value.type
         return new vscode.Location(
           fileUri,
-          fromElmRange(otherAst.moduleDefinition.value.normal.moduleName.range)
+          fromElmRange(otherAst.moduleDefinition.value[moduleDefinitionType].moduleName.range)
         )
       }
 
@@ -164,7 +166,8 @@ const handleJumpToLinksForImports = async ({ position, ast, elmJsonFile, package
 
             let otherDocument = await vscode.workspace.openTextDocument(fileUri)
             let otherAst = await ElmToAst.run(otherDocument.getText())
-            const topOfFileRange = otherAst.moduleDefinition.value.normal.moduleName.range
+            const moduleDefinitionType = otherAst.moduleDefinition.value.type
+            const topOfFileRange = otherAst.moduleDefinition.value[moduleDefinitionType].moduleName.range
             for (let declaration of otherAst.declarations) {
               let declarationName = getNameFromDeclaration(declaration)
               if (declarationName === name) {
@@ -281,7 +284,8 @@ const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFil
   }
 
   const isItemExposedFromModule = ({ isExplicitItemExposed }) => (ast, itemName) => {
-    let exposingList = ast.moduleDefinition.value.normal.exposingList
+    const moduleType = ast.moduleDefinition.value.type
+    let exposingList = ast.moduleDefinition.value[moduleType].exposingList
 
     if (exposingList.value.type === 'all') {
       return true

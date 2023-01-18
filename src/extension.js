@@ -2,6 +2,7 @@ const vscode = require('vscode')
 const autodetectElmJson = require('./features/autodetect-elm-json')
 const elmFormatOnSave = require('./features/elm-format-on-save')
 const errorHighlighting = require('./features/error-highlighting')
+const findUsages = require('./features/find-usages')
 const inlineAutocomplete = require('./features/inline-autocomplete')
 const jumpToDefinition = require('./features/jump-to-definition')
 const offlinePackageDocs = require('./features/offline-package-docs')
@@ -55,6 +56,10 @@ async function activate(context) {
     vscode.languages.registerDefinitionProvider('elm', jumpToDefinitionProvider)
   )
 
+  // Provide "Find references" for all types and functions
+  context.subscriptions.push(
+    vscode.languages.registerReferenceProvider('elm', findUsages(globalState))
+  )
 
   // Show inline compiler errors anytime a file is saved or opened
   context.subscriptions.push(
