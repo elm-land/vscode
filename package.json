@@ -13,6 +13,7 @@
     "Programming Languages"
   ],
   "activationEvents": [
+    "workspaceContains:**/elm.json",
     "onLanguage:elm"
   ],
   "main": "./src/extension.js",

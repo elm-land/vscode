@@ -22,7 +22,6 @@ module.exports = (globalState) => {
         const moduleName = getModuleNameFromAst(ast)
         const declarationName = getDeclarationName(ast, position)
 
-        console.log(declarationName)
         if (declarationName) {
           const filepathsImportingModule = await Grep.findElmFilesImportingModule({
             moduleName,
@@ -44,7 +43,7 @@ module.exports = (globalState) => {
 
       }
 
-      console.log(`findUsages`, `${Date.now() - start}ms`)
+      console.info(`findUsages`, `${Date.now() - start}ms`)
       return locations
     }
   }
@@ -59,10 +58,19 @@ const getModuleNameFromAst = (ast) => {
 
 const getDeclarationName = (ast, position) => {
   for (let declaration of ast.declarations) {
-    if (declaration.value.type === 'typeAlias') {
+    if (declaration.value.type === 'function') {
+      let signatureNameValue = declaration.value.function.signature.value.name
+      let declarationNameValue = declaration.value.function.declaration.value.name
+      let declarationNameRange = fromElmRange(declarationNameValue.range)
+      let signatureNameRange = fromElmRange(signatureNameValue.range)
+      let name = declarationNameValue.value
+      if (declarationNameRange.contains(position) || signatureNameRange.contains(position)) {
+        return name
+      }
+    } else if (declaration.value.type === 'typeAlias') {
       let range = fromElmRange(declaration.value.typeAlias.name.range)
       let name = declaration.value.typeAlias.name.value
-      if (range.contains) {
+      if (range.contains(position)) {
         return name
       }
     } else {
@@ -77,8 +85,6 @@ const scanForUsagesOf = ({ moduleName, declarationName }) => async (fsPath) => {
   const text = document.getText()
   const ast = await ElmToAst.run(text)
   const otherModuleName = ast.moduleDefinition.value.normal.moduleName.value.join('.')
-
-  console.log('Parsing AST for', otherModuleName)
 
   return [
     new vscode.Location(

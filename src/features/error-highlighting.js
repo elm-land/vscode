@@ -1,13 +1,19 @@
 const child_process = require('child_process')
 const path = require('path')
 const vscode = require('vscode')
-
+const sharedLogic = require('./_shared-logic')
 
 
 module.exports = async (globalState, collection, document, event) => {
-  let uri = vscode.Uri.file(document.fileName.split('.git')[0])
+  let uri =
+    document.fileName.includes('.git')
+      ? vscode.Uri.file(document.fileName.split('.git')[0])
+      : document.uri
 
-  if (uri.fsPath && uri.fsPath.endsWith('.elm')) {
+  const isElmFile = uri.fsPath && uri.fsPath.endsWith('.elm')
+  const isElmJsonFile = uri.fsPath && uri.fsPath.endsWith('elm.json')
+
+  if (isElmFile || isElmJsonFile) {
     let elmJsonFile = findElmJsonFor(globalState, uri)
 
     let compileElmFile = async (elmJsonFile, elmFilesToCompile) => {
@@ -28,10 +34,11 @@ module.exports = async (globalState, collection, document, event) => {
 
     if (elmJsonFile) {
       let entrypoints = await verifyEntrypointExists(elmJsonFile.entrypoints)
-      let elmFilesToCompile = entrypoints.concat([uri.fsPath])
+      let elmFilesToCompile = isElmFile ? entrypoints.concat([uri.fsPath]) : entrypoints
 
-      await compileElmFile(elmJsonFile, elmFilesToCompile)
-
+      if (elmFilesToCompile.length > 0) {
+        await compileElmFile(elmJsonFile, elmFilesToCompile)
+      }
     } else {
       console.error(`Couldn't find an elm.json file for ${uri.fsPath}`)
     }
@@ -42,6 +49,9 @@ let findElmJsonFor = (globalState, uri) => {
   let filepath = uri.fsPath
 
   for (let elmJsonFile of globalState.elmJsonFiles) {
+    if (elmJsonFile.uri.fsPath === filepath) {
+      return elmJsonFile
+    }
     for (let sourceDirectory of elmJsonFile.sourceDirectories) {
       if (filepath.startsWith(sourceDirectory)) {
         return elmJsonFile
@@ -65,7 +75,6 @@ const Elm = {
                   { kind: 'compile-errors', errors: json.errors }
                 )
               case 'error':
-                console.error({ json })
                 return resolve(
                   {
                     kind: 'error',
@@ -75,7 +84,6 @@ const Elm = {
                   }
                 )
               default:
-                console.error({ json })
                 throw new Error("Unhandled error type: " + json.type)
             }
           } catch (ex) {
@@ -92,23 +100,69 @@ const Elm = {
   toDiagnostics: (elmJsonFile, input) => {
     switch (input.error.kind) {
       case 'error':
-        return [
-          {
-            fsPath: input.error.path
-              ? path.join(elmJsonFile.projectFolder, input.error.path)
-              : elmJsonFile.uri.fsPath,
-            diagnostics: [
-              {
-                severity: vscode.DiagnosticSeverity.Error,
-                range: {
-                  start: new vscode.Position(0, 0),
-                  end: new vscode.Position(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)
-                },
-                message: Elm.formatErrorMessage(input.error.title, input.error.message)
-              }
+        const entireFileRange = {
+          start: new vscode.Position(0, 0),
+          end: new vscode.Position(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)
+        }
+        let items = []
+
+        if (input.error.title === 'MISSING SOURCE DIRECTORY') {
+          let directory = input.error.message.slice(1, -1).map(x => x.string)[0]
+          if (directory) {
+            let elmRange = sharedLogic.findFirstOccurenceOfWordInFile(directory, elmJsonFile.rawFileContents)
+            if (elmRange) {
+              items = [
+                toDiagnosticItem({
+                  filepath: elmJsonFile.uri.fsPath,
+                  problems: [
+                    {
+                      range: sharedLogic.fromElmRange(elmRange),
+                      title: input.error.title,
+                      message: input.error.message
+                    }
+                  ]
+                })
+              ]
+            }
+          }
+        } else if (input.error.title === 'MISSING SOURCE DIRECTORIES') {
+          let directories = input.error.message.filter(x => typeof x === 'object').map(x => x.string)
+          if (directories) {
+            items = [
+              toDiagnosticItem({
+                filepath: elmJsonFile.uri.fsPath,
+                problems: directories
+                  .map(directory => {
+                    let elmRange = sharedLogic.findFirstOccurenceOfWordInFile(directory, elmJsonFile.rawFileContents)
+                    if (elmRange) {
+                      return {
+                        range: sharedLogic.fromElmRange(elmRange),
+                        title: input.error.title,
+                        message: input.error.message
+                      }
+                    }
+                  }).filter(a => a)
+              })
             ]
           }
-        ]
+        } else {
+          items = [
+            toDiagnosticItem({
+              filepath:
+                input.error.path
+                  ? path.join(elmJsonFile.projectFolder, input.error.path)
+                  : elmJsonFile.uri.fsPath,
+              problems: [
+                {
+                  range: entireFileRange,
+                  title: input.error.title,
+                  message: input.error.message
+                }
+              ]
+            })
+          ]
+        }
+        return items
       case 'compile-errors':
         return input.error.errors.flatMap(error => {
           const problems = error.problems
@@ -146,6 +200,18 @@ const Elm = {
         return line.string
       }
     }).join('') + '\n'
+  }
+}
+
+const toDiagnosticItem = ({ filepath, problems }) => {
+  let diagnostics = problems.map(({ range, title, message }) => ({
+    severity: vscode.DiagnosticSeverity.Error,
+    range,
+    message: Elm.formatErrorMessage(title, message)
+  }))
+  return {
+    fsPath: filepath,
+    diagnostics
   }
 }
 

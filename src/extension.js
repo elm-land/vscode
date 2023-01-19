@@ -5,7 +5,6 @@ const errorHighlighting = require('./features/error-highlighting')
 const findUsages = require('./features/find-usages')
 const inlineAutocomplete = require('./features/inline-autocomplete')
 const jumpToDefinition = require('./features/jump-to-definition')
-const offlinePackageDocs = require('./features/offline-package-docs')
 
 const pluginId = `elmLand`
 let diagnostics = vscode.languages.createDiagnosticCollection(pluginId)
@@ -21,18 +20,6 @@ async function activate(context) {
 
   // Attempt to find an elm.json file at the project root
   await autodetectElmJson(globalState)
-
-  // Add command for offline package docs
-  context.subscriptions.push(
-    vscode.window.registerCustomEditorProvider(
-      'elmLand.packageDocs',
-      offlinePackageDocs(globalState),
-      {
-        webviewOptions: { retainContextWhenHidden: true },
-        supportsMultipleEditorsPerDocument: false
-      }
-    )
-  )
 
   // If user changes the current folder, look for the "elm.json" file again
   context.subscriptions.push(
@@ -61,7 +48,7 @@ async function activate(context) {
     vscode.languages.registerReferenceProvider('elm', findUsages(globalState))
   )
 
-  // Show inline compiler errors anytime a file is saved or opened
+  // Show inline compiler errors anytime an Elm file is saved or opened
   context.subscriptions.push(
     vscode.workspace.onDidOpenTextDocument(document => errorHighlighting(globalState, diagnostics, document, 'open'))
   )
@@ -69,6 +56,20 @@ async function activate(context) {
     vscode.workspace.onDidSaveTextDocument(document => errorHighlighting(globalState, diagnostics, document, 'save'))
   )
   context.subscriptions.push(diagnostics)
+
+  // Reload and show errors anytime an "elm.json" file is saved or opened
+  const recompileElmJson = async (document) => {
+    if (document.uri.fsPath.endsWith('elm.json')) {
+      await autodetectElmJson(globalState)
+      await errorHighlighting(globalState, diagnostics, document, 'open')
+    }
+  }
+  context.subscriptions.push(
+    vscode.workspace.onDidOpenTextDocument(recompileElmJson)
+  )
+  context.subscriptions.push(
+    vscode.workspace.onDidSaveTextDocument(recompileElmJson)
+  )
 }
 
 function deactivate() {
