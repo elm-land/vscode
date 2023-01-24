@@ -1,6 +1,8 @@
+// @ts-check
+
 const vscode = require('vscode')
 const sharedLogic = require('./_shared-logic')
-const ElmToAst = require('./elm-to-ast/index.js')
+const ElmSyntax = require('./elm-to-ast/index.js')
 
 const findLinkToPackageDocs = async ({ packages, moduleName, typeOrValueName }) => {
   let pathToDocsJson = packages[moduleName]
@@ -19,6 +21,8 @@ const findLinkToPackageDocs = async ({ packages, moduleName, typeOrValueName }) 
     params.set('pathToDocsJson', pathToDocsJson)
     params.set('moduleName', moduleName)
     params.set('typeOrValue', typeOrValueName)
+
+    // @ts-ignore
     uri.query = params.toString()
 
     return new vscode.Location(
@@ -33,16 +37,16 @@ module.exports = (globalState) => {
     async provideDefinition(doc, position, token) {
       const start = Date.now()
       const text = doc.getText()
-      const ast = await ElmToAst.run(text)
+      const ast = await ElmSyntax.run(text)
 
       if (ast) {
         const elmJsonFile = sharedLogic.findElmJsonFor(globalState, doc.uri)
 
         if (elmJsonFile) {
           // Handle module definitions
-          let matchingLocation = handleJumpToLinksForModuleDefinition({ doc, position, start, elmJsonFile, ast })
+          let matchingLocation = handleJumpToLinksForModuleDefinition({ doc, position, ast })
           if (matchingLocation) {
-            console.info('provideDefinition:moduleDefinition', `${Date.now() - start}ms`)
+            console.info('provideDefinition', `${Date.now() - start}ms`)
             return matchingLocation
           }
 
@@ -50,14 +54,14 @@ module.exports = (globalState) => {
           let packages = sharedLogic.getMappingOfPackageNameToDocJsonFilepath(elmJsonFile)
           matchingLocation = await handleJumpToLinksForImports({ position, ast, elmJsonFile, packages })
           if (matchingLocation) {
-            console.info('provideDefinition:imports', `${Date.now() - start}ms`)
+            console.info('provideDefinition', `${Date.now() - start}ms`)
             return matchingLocation
           }
 
           // Handle module declarations
-          matchingLocation = await handleJumpToLinksForDeclarations({ position, start, ast, doc, elmJsonFile, packages })
+          matchingLocation = await handleJumpToLinksForDeclarations({ position, ast, doc, elmJsonFile, packages })
           if (matchingLocation) {
-            console.info('provideDefinition:declaration', `${Date.now() - start}ms`)
+            console.info('provideDefinition', `${Date.now() - start}ms`)
             return matchingLocation
           }
         }
@@ -104,18 +108,21 @@ const handleJumpToLinksForImports = async ({ position, ast, elmJsonFile, package
       let fileUri = await findLocalProjectFileUri(elmJsonFile, moduleName)
       if (fileUri) {
         let otherDocument = await vscode.workspace.openTextDocument(fileUri)
-        let otherAst = await ElmToAst.run(otherDocument.getText())
-        const moduleDefinitionType = otherAst.moduleDefinition.value.type
-        return new vscode.Location(
-          fileUri,
-          sharedLogic.fromElmRange(otherAst.moduleDefinition.value[moduleDefinitionType].moduleName.range)
-        )
+        let otherAst = await ElmSyntax.run(otherDocument.getText())
+        if (otherAst) {
+          const moduleDefinitionType = otherAst.moduleDefinition.value.type
+          return new vscode.Location(
+            fileUri,
+            sharedLogic.fromElmRange(otherAst.moduleDefinition.value[moduleDefinitionType].moduleName.range)
+          )
+        }
       }
 
       // Check if this is from an Elm package
       let linkToPackageDocs = await findLinkToPackageDocs({
         packages,
-        moduleName
+        moduleName,
+        typeOrValueName: undefined
       })
       if (linkToPackageDocs) return linkToPackageDocs
     }
@@ -145,24 +152,27 @@ const handleJumpToLinksForImports = async ({ position, ast, elmJsonFile, package
           if (fileUri) {
 
             let otherDocument = await vscode.workspace.openTextDocument(fileUri)
-            let otherAst = await ElmToAst.run(otherDocument.getText())
-            const moduleDefinitionType = otherAst.moduleDefinition.value.type
-            const topOfFileRange = otherAst.moduleDefinition.value[moduleDefinitionType].moduleName.range
-            for (let declaration of otherAst.declarations) {
-              let declarationName = getNameFromDeclaration(declaration)
-              if (declarationName === name) {
+            let otherAst = await ElmSyntax.run(otherDocument.getText())
 
-                return new vscode.Location(
-                  fileUri,
-                  sharedLogic.fromElmRange(declaration.range)
-                )
+            if (otherAst) {
+              const moduleDefinitionType = otherAst.moduleDefinition.value.type
+              const topOfFileRange = otherAst.moduleDefinition.value[moduleDefinitionType].moduleName.range
+              for (let declaration of otherAst.declarations) {
+                let declarationName = getNameFromDeclaration(declaration)
+                if (declarationName === name) {
+
+                  return new vscode.Location(
+                    fileUri,
+                    sharedLogic.fromElmRange(declaration.range)
+                  )
+                }
               }
-            }
 
-            return new vscode.Location(
-              fileUri,
-              sharedLogic.fromElmRange(topOfFileRange)
-            )
+              return new vscode.Location(
+                fileUri,
+                sharedLogic.fromElmRange(topOfFileRange)
+              )
+            }
           }
         }
       }
@@ -190,7 +200,7 @@ const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFil
 
       if (importedModuleNameUri) {
         let importedDoc = await vscode.workspace.openTextDocument(importedModuleNameUri)
-        let importedAst = await ElmToAst.run(importedDoc.getText())
+        let importedAst = await ElmSyntax.run(importedDoc.getText())
 
         let item = findItemWithName(importedAst, moduleName)
 
@@ -549,8 +559,7 @@ const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFil
         return findLocationForExpressionWithName({
           name: expression.recordUpdate.name.value,
           args,
-          localDeclarations,
-          packages
+          localDeclarations
         })
       }
 
@@ -586,8 +595,7 @@ const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFil
           return findLocationForFunctionDeclaration(
             declaration,
             args,
-            newLocalDeclarations,
-            packages
+            newLocalDeclarations
           )
         }
       }
@@ -732,8 +740,7 @@ const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFil
       let matchingLocation = await findLocationOfItemsForExpression(
         func.declaration.value.expression.value,
         existingArgs.concat(args),
-        localDeclarations,
-        packages
+        localDeclarations
       )
       if (matchingLocation) return matchingLocation
     }
@@ -859,11 +866,10 @@ const findLocalProjectFileUri = async (elmJsonFile, moduleName) => {
     await Promise.all(
       elmJsonFile.sourceDirectories
         .map(folder => vscode.Uri.file(folder + '/' + moduleName.split('.').join('/') + '.elm'))
-        .map(fileUri =>
+        .map(fileUri => {
           vscode.workspace.fs.stat(fileUri)
             .then(stat => stat ? fileUri : false)
-            .catch(_ => false)
-        )
+        })
     )
       .then(files => files.filter(a => a)[0])
       .catch(_ => undefined)

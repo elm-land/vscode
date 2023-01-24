@@ -1,3 +1,4 @@
+// @ts-check
 const { exec } = require('node:child_process')
 
 // 
@@ -15,6 +16,10 @@ const { exec } = require('node:child_process')
 //      ]
 //    })
 // 
+
+/**
+ * @type {(input: { folders: string[], moduleName: string }) => Promise<string[]>}
+ */
 const findElmFilesImportingModule = async ({ folders, moduleName }) => {
   const isWindows = process.platform === "win32"
   // 

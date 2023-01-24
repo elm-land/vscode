@@ -3,7 +3,6 @@ const path = require('path')
 const vscode = require('vscode')
 const sharedLogic = require('./_shared-logic')
 
-
 module.exports = async (globalState, collection, document, event) => {
   let uri =
     document.fileName.includes('.git')

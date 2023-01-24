@@ -2,7 +2,7 @@
   "name": "elm-land",
   "displayName": "Elm Land",
   "description": "A minimal plugin for Elm",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "icon": "src/icon.png",
   "publisher": "elm-land",
   "repository": "https://github.com/elm-land/vscode",

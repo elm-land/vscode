@@ -1,12 +1,20 @@
+// @ts-check
+
 const vscode = require('vscode')
-const ElmToAst = require('./elm-to-ast/index.js')
+const ElmSyntax = require('./elm-to-ast/index.js')
 const Grep = require('./find-usages/grep.js')
 const sharedLogic = require('./_shared-logic')
 
 
 // VS code has zero-based ranges and positions, so we need to decrement all values
-// returned from ElmToAst so they work with the code editor
-const fromElmRange = (array) => new vscode.Range(...array.map(x => x - 1))
+// returned from ElmSyntax so they work with the code editor
+/** @type {(array: ElmSyntax.Range) => vscode.Range} */
+const fromElmRange = (elmRange) => new vscode.Range(
+  elmRange[0] - 1,
+  elmRange[1] - 1,
+  elmRange[2] - 1,
+  elmRange[3] - 1
+)
 
 module.exports = (globalState) => {
   return {
@@ -17,7 +25,7 @@ module.exports = (globalState) => {
 
       if (elmJson) {
         const text = document.getText()
-        const ast = await ElmToAst.run(text)
+        const ast = await ElmSyntax.run(text)
 
         const moduleName = getModuleNameFromAst(ast)
         const declarationName = getDeclarationName(ast, position)
@@ -83,8 +91,12 @@ const scanForUsagesOf = ({ moduleName, declarationName }) => async (fsPath) => {
   const uri = vscode.Uri.file(fsPath)
   const document = await vscode.workspace.openTextDocument(uri)
   const text = document.getText()
-  const ast = await ElmToAst.run(text)
-  const otherModuleName = ast.moduleDefinition.value.normal.moduleName.value.join('.')
+  const ast = await ElmSyntax.run(text)
+
+  if (ast) {
+    const otherModuleName = ElmSyntax.toModuleName(ast)
+    console.log({ otherModuleName })
+  }
 
   return [
     new vscode.Location(

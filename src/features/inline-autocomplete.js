@@ -1,7 +1,4 @@
 const sharedLogic = require('./_shared-logic')
-const vscode = require('vscode')
-
-
 
 module.exports = (globalState) => {
   return {
