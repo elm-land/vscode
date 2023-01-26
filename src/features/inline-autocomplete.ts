@@ -1,13 +1,20 @@
-const sharedLogic = require('./_shared-logic')
+import { GlobalState } from './autodetect-elm-json'
+import sharedLogic from './_shared-logic'
+import vscode from 'vscode'
 
-module.exports = (globalState) => {
+export default (globalState: GlobalState) => {
   return {
-    provideInlineCompletionItems(document, position, context, token) {
+    provideInlineCompletionItems(
+      document: vscode.TextDocument,
+      position: vscode.Position,
+      context: vscode.InlineCompletionContext,
+      token: vscode.CancellationToken
+    ) {
       let elmJsonFile = sharedLogic.findElmJsonFor(globalState, document.uri)
       if (elmJsonFile) {
         let plainModuleNames =
           elmJsonFile.dependencies
-            .flatMap(package => package.docs)
+            .flatMap(package_ => package_.docs)
             .map(module_ => module_.name)
 
         let availableModulesToImport =
@@ -39,13 +46,26 @@ module.exports = (globalState) => {
   }
 }
 
+type ProvideRecommendationsInput = {
+  document: vscode.TextDocument
+  position: vscode.Position
+  sourceDirectories: string[]
+  availableModulesToImport: Recommendation[]
+  plainModuleNames: string[]
+}
+
+type Recommendation = {
+  regex: RegExp
+  suggestions: string[]
+}
+
 const provideRecommendations = ({
   document,
   position,
   sourceDirectories,
   availableModulesToImport,
   plainModuleNames
-}) => {
+}: ProvideRecommendationsInput) => {
   // Every Elm module's name should match the folder it is in,
   // so we can recommend a name for new files my looking at the filepath
   let moduleName = determineModuleNameBasedOnElmJson(document, sourceDirectories)
@@ -59,10 +79,10 @@ const provideRecommendations = ({
     return [{ insertText: moduleSuggestion, completeBracketPairs: true }]
   }
 
-  let recommendations = [
+  let recommendations: Recommendation[] = [
     // modules
     { regex: /^module\s+\S+\s+\S*/, suggestions: ['exposing '] },
-    { regex: /^module\s+\S*/, suggestions: [moduleName] },
+    { regex: /^module\s+\S*/, suggestions: moduleName ? [moduleName] : [] },
     // imports
     { regex: /^import\s+\S+\s+\S*/, suggestions: ['exposing ', 'as '] },
     ...availableModulesToImport,
@@ -88,7 +108,7 @@ const provideRecommendations = ({
 }
 
 // Converts "~/src/Example/File.elm" into "Example.File"
-function determineModuleNameBasedOnElmJson(document, sourceDirectories) {
+function determineModuleNameBasedOnElmJson(document: vscode.TextDocument, sourceDirectories: string[]) {
   for (let directory of sourceDirectories) {
     if (document.fileName.startsWith(directory)) {
       return document.fileName
@@ -106,16 +126,21 @@ const preludeModuleNames =
 const preludeModuleAliases =
   'Basics List Maybe Result String Char Tuple Debug Platform Cmd Sub'.split(' ')
 
-const notInElmPrelude = (name) =>
+const notInElmPrelude = (name: string) =>
   preludeModuleNames.indexOf(name) === -1
 
-const areTopLevelModules = (name) =>
+const areTopLevelModules = (name: string) =>
   name.indexOf('.') === -1
 
-const emptyNode = (depth) =>
+type DepthNode = {
+  depth: number
+  suggestions: string[]
+}
+
+const emptyNode = (depth: number): DepthNode =>
   ({ depth, suggestions: [] })
 
-const buildModuleImportRegexSuggestion = (regexToSuggestionsMap, modulePath) => {
+const buildModuleImportRegexSuggestion = (regexToSuggestionsMap: Record<string, DepthNode>, modulePath: string) => {
   let segments = modulePath.split('.')
 
   for (let i = 0; i < segments.length; i++) { // 0 1
@@ -129,16 +154,16 @@ const buildModuleImportRegexSuggestion = (regexToSuggestionsMap, modulePath) => 
       let child = segments.slice(i + 1, segments.length).join('.')
       let regex = `^import\\s+${name}\\.[^\\.\\s]+`
 
-      regexToSuggestionsMap[regex] = regexToSuggestionsMap[regex] || emptyNode(i)
-      regexToSuggestionsMap[regex].suggestions.push(child)
+      regexToSuggestionsMap[regex] = regexToSuggestionsMap[regex] || emptyNode(i);
+      (regexToSuggestionsMap[regex] as DepthNode).suggestions.push(child)
     }
   }
 
   return regexToSuggestionsMap
 }
 
-const byModuleDepthDescending = ([k1, v1], [k2, v2]) =>
+const byModuleDepthDescending = ([k1, v1]: [string, DepthNode], [k2, v2]: [string, DepthNode]) =>
   v2.depth - v1.depth
 
-const toRegexSuggestionEntry = ([regex, value]) =>
+const toRegexSuggestionEntry = ([regex, value]: [string, DepthNode]) =>
   ({ regex: new RegExp(regex), suggestions: value.suggestions })

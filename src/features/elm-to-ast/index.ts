@@ -28,7 +28,7 @@ export type Range = [number, number, number, number]
 export type Module
   = { type: 'normal', normal: ModuleData }
   | { type: 'port', port: ModuleData }
-  | { type: 'effect', effect: ModuleData & EffectModuleData }
+  | { type: 'effect', effect: EffectModuleData }
 
 export type ModuleData = {
   moduleName: Node<string[]>
@@ -47,7 +47,7 @@ export type EffectModuleData = {
 // 
 export type Import = {
   moduleName: Node<string[]>
-  moduleAlias: Node<string []> | null
+  moduleAlias: Node<string[]> | null
   exposingList: Node<Exposing> | null
 }
 
@@ -64,13 +64,13 @@ export type TopLevelExpose
 // 
 // Declarations
 // 
-export type Declaration 
-  = { kind: 'function', function: Function_ }
-  | { kind: 'typeAlias', typeAlias: TypeAlias }
-  | { kind: 'typedecl', typedecl: TypeDecl }
-  | { kind: 'port', port: Signature }
-  | { kind: 'infix', infix: Infix }
-  | { kind: 'destructuring', destructuring: Destructuring }
+export type Declaration
+  = { type: 'function', function: Function_ }
+  | { type: 'typeAlias', typeAlias: TypeAlias }
+  | { type: 'typedecl', typedecl: TypeDecl }
+  | { type: 'port', port: Signature }
+  | { type: 'infix', infix: Infix }
+  | { type: 'destructuring', destructuring: Destructuring }
 
 export type Function_ = {
   documentation: Node<Documentation> | null
@@ -85,7 +85,7 @@ export type Signature = {
   typeAnnotation: Node<TypeAnnotation>
 }
 
-export type TypeAnnotation 
+export type TypeAnnotation
   = { type: 'generic', generic: { value: string } }
   | { type: 'typed', typed: TypedTypeAnnotation }
   | { type: 'unit', unit: {} }
@@ -94,18 +94,18 @@ export type TypeAnnotation
   | { type: 'record', record: RecordAnnotation }
   | { type: 'genericRecord', genericRecord: GenericRecordAnnotation }
 
-  export type TypedTypeAnnotation = {
-    moduleNameAndName: Node<ModuleNameAndName>
-    args: Node<TypeAnnotation>[]
-  }
+export type TypedTypeAnnotation = {
+  moduleNameAndName: Node<ModuleNameAndName>
+  args: Node<TypeAnnotation>[]
+}
 
-  export type FunctionTypeAnnotation = {
-    left: Node<TypeAnnotation>
-    right: Node<TypeAnnotation>
-  }
+export type FunctionTypeAnnotation = {
+  left: Node<TypeAnnotation>
+  right: Node<TypeAnnotation>
+}
 
-export type TupledAnnotation = { 
-  values: Node<TypeAnnotation>[] 
+export type TupledAnnotation = {
+  values: Node<TypeAnnotation>[]
 }
 
 export type RecordAnnotation = {
@@ -198,7 +198,7 @@ export type Destructuring = {
   expression: Node<Expression>
 }
 
-export type Expression 
+export type Expression
   = { type: 'unit', unit: null }
   | { type: 'application', application: Node<Expression>[] }
   | { type: 'operatorapplication', operatorapplication: OperatorApplication }
@@ -248,8 +248,8 @@ export type LetBlockExpression = {
 }
 
 export type LetDeclarationExpression
-  = { kind: 'function', function: Function_ }
-  | { kind: 'destructuring', destructuring: Destructuring }
+  = { type: 'function', function: Function_ }
+  | { type: 'destructuring', destructuring: Destructuring }
 
 export type CaseBlockExpression = {
   cases: Case[]
@@ -281,5 +281,106 @@ export type RecordUpdateExpression = {
   updates: Node<Expression>[]
 }
 
-export function run(rawElmSource: string) : Promise<Ast | undefined>
-export function toModuleName(ast: Ast): string
+type CompiledElmFile = {
+  Worker: {
+    init: (args: { flags: string }) => ElmApp
+  }
+}
+
+type ElmApp = {
+  ports: {
+    onSuccess: { subscribe: (fn: (ast: Ast) => void) => void }
+    onFailure: { subscribe: (fn: (reason: string) => void) => void }
+  }
+}
+
+export const run = async (rawElmSource: string): Promise<Ast | undefined> => {
+  // Attempt to load the compiled Elm worker
+  try {
+    // @ts-ignore
+    let Elm: CompiledElmFile = require('./worker.min.js').Elm
+    return new Promise((resolve) => {
+      // Start the Elm worker, and subscribe to 
+      const app = Elm.Worker.init({
+        flags: rawElmSource || ''
+      })
+
+      app.ports.onSuccess.subscribe(resolve)
+      app.ports.onFailure.subscribe((reason) => {
+        resolve(undefined)
+      })
+    })
+  } catch (_) {
+    console.error(`ElmToAst`, `Missing "worker.min.js"? Please follow the README section titled "Building from scratch"`)
+    return undefined
+  }
+
+}
+
+export const toModuleData = (ast: Ast): ModuleData => {
+  let type = ast.moduleDefinition.value.type
+  return (ast.moduleDefinition.value as any)[type]
+}
+
+export const toModuleName = (ast: Ast): string => {
+  return toModuleData(ast).moduleName.value.join('.')
+}
+
+export const toTopLevelExposeName = (exposing: TopLevelExpose): string => {
+  let type = exposing.type
+  return (exposing as any)[type].name
+}
+
+export const toDeclarationName = (declaration: Node<Declaration>): string | null => {
+  switch (declaration.value.type) {
+    case 'typedecl':
+      return declaration.value.typedecl.name.value
+    case 'function':
+      return declaration.value.function.declaration.value.name.value
+    case 'typeAlias':
+      return declaration.value.typeAlias.name.value
+    case 'port':
+      return declaration.value.port.name.value
+    case 'destructuring':
+      return null
+    case 'infix':
+      return null
+  }
+}
+
+export const findDeclarationWithName = (ast: Ast, name: string): Node<Declaration> | undefined => {
+  for (let declaration of ast.declarations) {
+    let declarationName = toDeclarationName(declaration)
+    if (declarationName === name) {
+      return declaration
+    }
+  }
+}
+
+export const getNameFromModuleNameAndName = (moduleNameAndName: Node<ModuleNameAndName>): string => {
+  return [
+    ...moduleNameAndName.value.moduleName,
+    moduleNameAndName.value.name
+  ].join('.')
+}
+
+export const findCustomTypeVariantWithName = (ast: Ast, name: string): Node<TypeConstructor> | undefined => {
+  for (let declaration of ast.declarations) {
+    if (declaration.value.type === 'typedecl') {
+      let customTypeVariants = declaration.value.typedecl.constructors
+      for (let variant of customTypeVariants) {
+        if (variant.value.name.value === name) {
+          return variant
+        }
+      }
+    }
+  }
+}
+
+export const isFunctionDeclaration =
+  (declaration: Node<Declaration>)
+    : declaration is Node<{
+      type: 'function',
+      function: Function_
+    }> =>
+    declaration.value.type === 'function'

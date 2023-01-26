@@ -16,7 +16,7 @@
     "workspaceContains:**/elm.json",
     "onLanguage:elm"
   ],
-  "main": "./src/extension.js",
+  "main": "./dist/extension.js",
   "contributes": {
     "configurationDefaults": {
       "[elm]": {
@@ -27,7 +27,7 @@
         "editor.semanticHighlighting.enabled": true
       }
     },
-    "configuration":[
+    "configuration": [
       {
         "type": "object",
         "title": "Elm Land",
@@ -35,7 +35,10 @@
           "elmLand.entrypointFilepaths": {
             "description": "The filepath to your project's Main module, relative to the elm.json file.",
             "type": "array",
-            "default": ["src/Main.elm", ".elm-land/src/Main.elm"],
+            "default": [
+              "src/Main.elm",
+              ".elm-land/src/Main.elm"
+            ],
             "scope": "resource"
           }
         }
@@ -75,11 +78,16 @@
     ]
   },
   "capabilities": {
-    "referencesProvider" : "true"
+    "referencesProvider": "true"
   },
   "dependencies": {
     "elm": "0.19.1-5",
     "elm-format": "0.8.5",
     "elmi-to-json": "1.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "18.11.18",
+    "@types/vscode": "1.74.0",
+    "typescript": "4.9.4"
   }
 }

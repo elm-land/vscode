@@ -1,23 +1,24 @@
-const vscode = require('vscode')
+import vscode from 'vscode'
+import { GlobalState } from './autodetect-elm-json'
 
-module.exports = (globalState) => {
+export default (globalState: GlobalState) => {
   return {
-    openCustomDocument: (uri, context, token) => {
+    openCustomDocument: (uri: vscode.Uri, context: vscode.CustomDocumentOpenContext, token: vscode.CancellationToken) => {
       // This gets passed into resolveCustomEditor
       return {
         uri,
         dispose: () => { }
       }
     },
-    resolveCustomEditor: async (document, panel, token) => {
+    resolveCustomEditor: async (document: vscode.TextDocument, panel: vscode.WebviewPanel, token: vscode.CancellationToken) => {
       let uri = document.uri
-      let [author, package, version] = uri.path.split('/').slice(-4, -1)
+      let [author, package_, version] = uri.path.split('/').slice(-4, -1)
       let params = new URLSearchParams(uri.query)
       let moduleName = params.get('moduleName')
       let typeOrValue = params.get('typeOrValue')
       let docs = await vscode.workspace.openTextDocument(uri)
       let url =
-        `https://package.elm-lang.org/packages/${author}/${package}/${version}/${moduleName.split('.').join('-')}`
+        `https://package.elm-lang.org/packages/${author}/${package_}/${version}/${(moduleName || '').split('.').join('-')}`
 
       if (typeOrValue) {
         url += `#` + typeOrValue
@@ -25,7 +26,7 @@ module.exports = (globalState) => {
 
       const flags = {
         author,
-        package,
+        package: package_,
         version,
         moduleName,
         typeOrValue,
@@ -39,7 +40,7 @@ module.exports = (globalState) => {
           <h1>Elm Packages!</h1>
           <ul>
             <li>Author: ${author}</li>
-            <li>Package: ${package}</li>
+            <li>Package: ${package_}</li>
             <li>Version: ${version}</li>
             <li>Module name: ${moduleName}</li>
             <li>Type or value: ${typeOrValue}</li>

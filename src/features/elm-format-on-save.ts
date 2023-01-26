@@ -1,8 +1,12 @@
-const vscode = require('vscode')
-const child_process = require("child_process")
+import vscode from 'vscode'
+import child_process from "child_process"
 
-module.exports = {
-  async provideDocumentFormattingEdits(document, options, token) {
+export default {
+  async provideDocumentFormattingEdits(
+    document: vscode.TextDocument,
+    options: vscode.FormattingOptions,
+    token: vscode.CancellationToken
+  ) {
     try {
       let text = await runElmFormat(document)
       return [vscode.TextEdit.replace(getFullDocRange(document), text)]
@@ -12,7 +16,7 @@ module.exports = {
   }
 }
 
-function runElmFormat(document) {
+function runElmFormat(document: vscode.TextDocument): Promise<string> {
   const command = `npx elm-format --stdin --yes`
   const original = document.getText()
   return new Promise((resolve, reject) => {
@@ -29,7 +33,7 @@ function runElmFormat(document) {
   })
 }
 
-function getFullDocRange(document) {
+function getFullDocRange(document: vscode.TextDocument): vscode.Range {
   return document.validateRange(
     new vscode.Range(
       new vscode.Position(0, 0),

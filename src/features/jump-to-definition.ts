@@ -1,10 +1,17 @@
-// @ts-check
+import vscode from 'vscode'
+import sharedLogic from './_shared-logic'
+import * as ElmSyntax from './elm-to-ast/index.js'
+import { ElmJsonFile, GlobalState } from './autodetect-elm-json'
 
-const vscode = require('vscode')
-const sharedLogic = require('./_shared-logic')
-const ElmSyntax = require('./elm-to-ast/index.js')
+type Packages = { [moduleName: string]: string }
 
-const findLinkToPackageDocs = async ({ packages, moduleName, typeOrValueName }) => {
+type FindLinkToPackageDocsInput = {
+  packages: Packages
+  moduleName: string
+  typeOrValueName?: string
+}
+
+const findLinkToPackageDocs = async ({ packages, moduleName, typeOrValueName }: FindLinkToPackageDocsInput) => {
   let pathToDocsJson = packages[moduleName]
   if (pathToDocsJson) {
     let uri = vscode.Uri.file(pathToDocsJson)
@@ -20,7 +27,9 @@ const findLinkToPackageDocs = async ({ packages, moduleName, typeOrValueName }) 
     let params = new URLSearchParams()
     params.set('pathToDocsJson', pathToDocsJson)
     params.set('moduleName', moduleName)
-    params.set('typeOrValue', typeOrValueName)
+    if (typeOrValueName) {
+      params.set('typeOrValue', typeOrValueName)
+    }
 
     // @ts-ignore
     uri.query = params.toString()
@@ -32,9 +41,9 @@ const findLinkToPackageDocs = async ({ packages, moduleName, typeOrValueName }) 
   }
 }
 
-module.exports = (globalState) => {
+export default (globalState: GlobalState) => {
   return {
-    async provideDefinition(doc, position, token) {
+    async provideDefinition(doc: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken) {
       const start = Date.now()
       const text = doc.getText()
       const ast = await ElmSyntax.run(text)
@@ -70,19 +79,24 @@ module.exports = (globalState) => {
   }
 }
 
-const handleJumpToLinksForModuleDefinition = ({ doc, position, ast }) => {
-  const moduleDefinitionType = ast.moduleDefinition.value.type
-  let exposingList = ast.moduleDefinition.value[moduleDefinitionType].exposingList
+
+type HandleJumpLinksInput = {
+  doc: vscode.TextDocument
+  position: vscode.Position
+  ast: ElmSyntax.Ast
+}
+
+const handleJumpToLinksForModuleDefinition = ({ doc, position, ast }: HandleJumpLinksInput) => {
+  const moduleData = ElmSyntax.toModuleData(ast)
+  let exposingList = moduleData.exposingList
 
   if (exposingList.value.type === 'explicit') {
     let explictExports = exposingList.value.explicit
     for (let export_ of explictExports) {
       let range = sharedLogic.fromElmRange(export_.range)
       if (range.contains(position)) {
-        let type = export_.value.type
-        let name = export_.value[type].name
-
-        let declaration = findDeclarationWithName(ast, name)
+        let name = ElmSyntax.toTopLevelExposeName(export_.value)
+        let declaration = ElmSyntax.findDeclarationWithName(ast, name)
 
         if (declaration) {
           return new vscode.Location(
@@ -95,126 +109,153 @@ const handleJumpToLinksForModuleDefinition = ({ doc, position, ast }) => {
   }
 }
 
-const handleJumpToLinksForImports = async ({ position, ast, elmJsonFile, packages }) => {
+type HandleJumpToLinksForImportsInput = {
+  position: vscode.Position
+  ast: ElmSyntax.Ast
+  elmJsonFile: ElmJsonFile
+  packages: Packages
+}
 
-  for (let import_ of ast.imports) {
+const handleJumpToLinksForImports =
+  async ({ position, ast, elmJsonFile, packages }: HandleJumpToLinksForImportsInput)
+    : Promise<vscode.Location | undefined> => {
 
-    // Add any links to locally imported modules
-    let range = sharedLogic.fromElmRange(import_.value.moduleName.range)
-    if (range.contains(position)) {
-      const moduleNameNode = import_.value.moduleName
-      const moduleName = moduleNameNode.value.join('.')
+    for (let import_ of ast.imports) {
 
-      let fileUri = await findLocalProjectFileUri(elmJsonFile, moduleName)
-      if (fileUri) {
-        let otherDocument = await vscode.workspace.openTextDocument(fileUri)
-        let otherAst = await ElmSyntax.run(otherDocument.getText())
-        if (otherAst) {
-          const moduleDefinitionType = otherAst.moduleDefinition.value.type
-          return new vscode.Location(
-            fileUri,
-            sharedLogic.fromElmRange(otherAst.moduleDefinition.value[moduleDefinitionType].moduleName.range)
-          )
+      // Add any links to locally imported modules
+      let range = sharedLogic.fromElmRange(import_.value.moduleName.range)
+      if (range.contains(position)) {
+        const moduleNameNode = import_.value.moduleName
+        const moduleName = moduleNameNode.value.join('.')
+
+        let fileUri = await findLocalProjectFileUri(elmJsonFile, moduleName)
+        if (fileUri) {
+          let otherDocument = await vscode.workspace.openTextDocument(fileUri)
+          let otherAst = await ElmSyntax.run(otherDocument.getText())
+          if (otherAst) {
+            const otherModuleData: ElmSyntax.ModuleData = ElmSyntax.toModuleData(otherAst)
+            return new vscode.Location(
+              fileUri,
+              sharedLogic.fromElmRange(otherModuleData.moduleName.range)
+            )
+          }
         }
+
+        // Check if this is from an Elm package
+        let linkToPackageDocs = await findLinkToPackageDocs({
+          packages,
+          moduleName
+        })
+        if (linkToPackageDocs) return linkToPackageDocs
       }
 
-      // Check if this is from an Elm package
-      let linkToPackageDocs = await findLinkToPackageDocs({
-        packages,
-        moduleName,
-        typeOrValueName: undefined
-      })
-      if (linkToPackageDocs) return linkToPackageDocs
-    }
+      // Check if user is hovering over an exposed import value
+      if (import_.value.exposingList && import_.value.exposingList.value.type === 'explicit') {
+        const explicitlyImportedValues = import_.value.exposingList.value.explicit
+        for (let explicitImport of explicitlyImportedValues) {
+          let range = sharedLogic.fromElmRange(explicitImport.range)
+          if (range.contains(position)) {
+            const name = ElmSyntax.toTopLevelExposeName(explicitImport.value)
 
-    // Check if user is hovering over an exposed import value
-    if (import_.value.exposingList && import_.value.exposingList.value.type === 'explicit') {
-      const explicitlyImportedValues = import_.value.exposingList.value.explicit
-      for (let explicitImport of explicitlyImportedValues) {
-        let range = sharedLogic.fromElmRange(explicitImport.range)
-        if (range.contains(position)) {
-          const type = explicitImport.value.type
-          const name = explicitImport.value[type] ? explicitImport.value[type].name : undefined
+            const moduleNameNode = import_.value.moduleName.value.join('.')
+            const moduleName = moduleNameNode
 
-          const moduleNameNode = import_.value.moduleName.value.join('.')
-          const moduleName = moduleNameNode
+            // Check if this is from an Elm package
+            let linkToPackageDocs = await findLinkToPackageDocs({
+              packages,
+              moduleName,
+              typeOrValueName: name
+            })
+            if (linkToPackageDocs) return linkToPackageDocs
 
-          // Check if this is from an Elm package
-          let linkToPackageDocs = await findLinkToPackageDocs({
-            packages,
-            moduleName,
-            typeOrValueName: name
-          })
-          if (linkToPackageDocs) return linkToPackageDocs
+            // Check if module is a local project file
+            let fileUri = await findLocalProjectFileUri(elmJsonFile, moduleName)
+            if (fileUri) {
 
-          // Check if module is a local project file
-          let fileUri = await findLocalProjectFileUri(elmJsonFile, moduleName)
-          if (fileUri) {
+              let otherDocument = await vscode.workspace.openTextDocument(fileUri)
+              let otherAst = await ElmSyntax.run(otherDocument.getText())
 
-            let otherDocument = await vscode.workspace.openTextDocument(fileUri)
-            let otherAst = await ElmSyntax.run(otherDocument.getText())
+              if (otherAst) {
+                const topOfFileRange = ElmSyntax.toModuleData(otherAst).moduleName.range
 
-            if (otherAst) {
-              const moduleDefinitionType = otherAst.moduleDefinition.value.type
-              const topOfFileRange = otherAst.moduleDefinition.value[moduleDefinitionType].moduleName.range
-              for (let declaration of otherAst.declarations) {
-                let declarationName = getNameFromDeclaration(declaration)
-                if (declarationName === name) {
+                for (let declaration of otherAst.declarations) {
+                  let declarationName = ElmSyntax.toDeclarationName(declaration)
+                  if (declarationName === name) {
 
-                  return new vscode.Location(
-                    fileUri,
-                    sharedLogic.fromElmRange(declaration.range)
-                  )
+                    return new vscode.Location(
+                      fileUri,
+                      sharedLogic.fromElmRange(declaration.range)
+                    )
+                  }
                 }
-              }
 
-              return new vscode.Location(
-                fileUri,
-                sharedLogic.fromElmRange(topOfFileRange)
-              )
+                return new vscode.Location(
+                  fileUri,
+                  sharedLogic.fromElmRange(topOfFileRange)
+                )
+              }
             }
           }
         }
       }
     }
   }
+
+type HandleJumpToLinksForDeclarationsInput = {
+  position: vscode.Position
+  ast: ElmSyntax.Ast,
+  doc: vscode.TextDocument
+  elmJsonFile: ElmJsonFile
+  packages: Packages
 }
 
-const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFile, packages }) => {
+const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFile, packages }: HandleJumpToLinksForDeclarationsInput) => {
   // Need to build up a collection of which types and values
   // are being exposed by all imports.
   // (This will be useful later when jumping to definitions)
-  let explicitExposingValuesForImports = {}
-  let hasUnknownImportsFromExposingAll = []
-  let aliasMappingToModuleNames = {}
+  let explicitExposingValuesForImports: Record<string, string[]> = {}
+  let hasUnknownImportsFromExposingAll: string[] = []
+  let aliasMappingToModuleNames: Record<string, string[]> = {}
 
-  const findImportedModuleNamesThatMightHaveExposedThisValue = (moduleName) => {
+  const findImportedModuleNamesThatMightHaveExposedThisValue = (moduleName: string): string[] => {
     let explicitMatches = explicitExposingValuesForImports[moduleName] || []
     return explicitMatches.concat(hasUnknownImportsFromExposingAll)
   }
 
-  const findLocationOfItemFromImportedFiles = ({ findItemWithName, isItemExposedFromModule }) => async (importModuleNames, moduleName) => {
-    for (let importedModuleName of importModuleNames) {
-      // POST-MATURE OPTIMIZATION: Opportunity to make these filesystem calls in parallel
-      let importedModuleNameUri = await findLocalProjectFileUri(elmJsonFile, importedModuleName)
-
-      if (importedModuleNameUri) {
-        let importedDoc = await vscode.workspace.openTextDocument(importedModuleNameUri)
-        let importedAst = await ElmSyntax.run(importedDoc.getText())
-
-        let item = findItemWithName(importedAst, moduleName)
-
-        if (item && isItemExposedFromModule(importedAst, moduleName)) {
-          return new vscode.Location(
-            importedModuleNameUri,
-            sharedLogic.fromElmRange(item.range)
-          )
-        }
-      }
-    }
+  type FindLocationOfItemFromImportedFilesInput<item> = {
+    findItemWithName: (ast: ElmSyntax.Ast, moduleName: string) => ElmSyntax.Node<item> | undefined
+    isItemExposedFromModule: (ast: ElmSyntax.Ast, moduleName: string) => boolean
   }
 
-  const isDeclarationExposed = (exposingList, itemName) => {
+  const findLocationOfItemFromImportedFiles =
+    <item>({ findItemWithName, isItemExposedFromModule }: FindLocationOfItemFromImportedFilesInput<item>) =>
+      async (importModuleNames: string[], moduleName: string) => {
+        for (let importedModuleName of importModuleNames) {
+          // POST-MATURE OPTIMIZATION: Opportunity to make these filesystem calls in parallel
+          let importedModuleNameUri = await findLocalProjectFileUri(elmJsonFile, importedModuleName)
+
+          if (importedModuleNameUri) {
+            let importedDoc = await vscode.workspace.openTextDocument(importedModuleNameUri)
+            let importedAst = await ElmSyntax.run(importedDoc.getText())
+
+            if (importedAst) {
+              let item = findItemWithName(importedAst, moduleName)
+
+              if (item && isItemExposedFromModule(importedAst, moduleName)) {
+                return new vscode.Location(
+                  importedModuleNameUri,
+                  sharedLogic.fromElmRange(item.range)
+                )
+              }
+            }
+          }
+        }
+      }
+
+  const isDeclarationExposed = (
+    exposingList: ElmSyntax.Node<ElmSyntax.TopLevelExpose>[],
+    itemName: string
+  ): boolean => {
     for (let item of exposingList) {
       if (item.value.type === 'typeOrAlias') {
         if (item.value.typeOrAlias.name === itemName) {
@@ -235,7 +276,11 @@ const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFil
     return false
   }
 
-  const isCustomTypeVariantExposed = (exposingList, itemName, ast) => {
+  const isCustomTypeVariantExposed = (
+    exposingList: ElmSyntax.Node<ElmSyntax.TopLevelExpose>[],
+    itemName: string,
+    ast: ElmSyntax.Ast
+  ) => {
     for (let item of exposingList) {
       if (item.value.type === 'typeOrAlias') {
         // keep looping
@@ -261,36 +306,45 @@ const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFil
     return false
   }
 
-  const findCustomVariantNamesInModule = (ast, customTypeName) => {
+  const findCustomVariantNamesInModule = (ast: ElmSyntax.Ast, customTypeName: string) => {
     for (let declaration of ast.declarations) {
       if (declaration.value.type === 'typedecl') {
         let typeDeclaration = declaration.value.typedecl
         if (typeDeclaration.name.value === customTypeName) {
-          return typeDeclaration.constructors.map(constructor => constructor.value.name.value)
+          return typeDeclaration.constructors.map((constructor: ElmSyntax.Node<ElmSyntax.TypeConstructor>) => constructor.value.name.value)
         }
       }
     }
     return []
   }
 
-  const isItemExposedFromModule = ({ isExplicitItemExposed }) => (ast, itemName) => {
-    const moduleType = ast.moduleDefinition.value.type
-    let exposingList = ast.moduleDefinition.value[moduleType].exposingList
+  type IsExplicitItemExposed =
+    (a: ElmSyntax.Node<ElmSyntax.TopLevelExpose>[],
+      b: string,
+      ast: ElmSyntax.Ast
 
-    if (exposingList.value.type === 'all') {
-      return true
-    } else if (exposingList.value.type === 'explicit') {
-      return isExplicitItemExposed(
-        exposingList.value.explicit,
-        itemName,
-        ast
-      )
-    } else {
-      console.error('provideDefinition:error:unhandledExposingList', exposingList.value)
-    }
+    ) => boolean
 
-    return false
-  }
+  const isItemExposedFromModule =
+    ({ isExplicitItemExposed }: { isExplicitItemExposed: IsExplicitItemExposed }) =>
+      (ast: ElmSyntax.Ast, itemName: string): boolean => {
+        const moduleData: ElmSyntax.ModuleData = ElmSyntax.toModuleData(ast)
+        let exposingList = moduleData.exposingList
+
+        if (exposingList.value.type === 'all') {
+          return true
+        } else if (exposingList.value.type === 'explicit') {
+          return isExplicitItemExposed(
+            exposingList.value.explicit,
+            itemName,
+            ast
+          )
+        } else {
+          console.error('provideDefinition:error:unhandledExposingList', exposingList.value)
+        }
+
+        return false
+      }
 
   const isDeclarationExposedFromModule = isItemExposedFromModule({
     isExplicitItemExposed: isDeclarationExposed
@@ -301,17 +355,22 @@ const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFil
   })
 
   const findLocationOfDeclarationFromImportedFiles = findLocationOfItemFromImportedFiles({
-    findItemWithName: findDeclarationWithName,
+    findItemWithName: ElmSyntax.findDeclarationWithName,
     isItemExposedFromModule: isDeclarationExposedFromModule
   })
 
   const findLocationOfCustomTypeVariantFromImportedFiles = findLocationOfItemFromImportedFiles({
-    findItemWithName: findCustomTypeVariantWithName,
+    findItemWithName: ElmSyntax.findCustomTypeVariantWithName,
     isItemExposedFromModule: isCustomTypeVariantExposedFromModule
   })
 
-  const findLocationOfItemForModuleName = ({ findItemWithName, findLocationOfItem }) =>
-    async ({ doc, ast, moduleName }) => {
+  type FindLocationOfItemForModuleNameInput<item> = {
+    findItemWithName: (ast: ElmSyntax.Ast, moduleName: string) => ElmSyntax.Node<item> | undefined
+    findLocationOfItem: (otherModuleNames: string[], name: string) => Promise<vscode.Location | undefined>
+  }
+
+  const findLocationOfItemForModuleName = <item>({ findItemWithName, findLocationOfItem }: FindLocationOfItemForModuleNameInput<item>) =>
+    async ({ doc, ast, moduleName }: { doc: vscode.TextDocument, ast: ElmSyntax.Ast, moduleName: string }): Promise<vscode.Location | undefined> => {
       let couldBeFromThisModuleOrAnImport = moduleName.split('.').length === 1
       let parentModules = moduleName.split('.').slice(0, -1)
       let name = moduleName.split('.').slice(-1)[0]
@@ -329,11 +388,13 @@ const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFil
         let otherModuleNamesToCheck = findImportedModuleNamesThatMightHaveExposedThisValue(moduleName) || []
 
         // Check local project files
-        let matchingLocation = await findLocationOfItem(otherModuleNamesToCheck, name)
-        if (matchingLocation) return matchingLocation
+        if (name) {
+          let matchingLocation = await findLocationOfItem(otherModuleNamesToCheck, name)
+          if (matchingLocation) return matchingLocation
+        }
 
         // Check installed Elm packages
-        for (var moduleName of otherModuleNamesToCheck) {
+        for (let moduleName of otherModuleNamesToCheck) {
           let linkToPackageDocs = await findLinkToPackageDocs({
             packages,
             moduleName,
@@ -350,8 +411,10 @@ const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFil
         let moduleNamesToCheck = [parentModuleName].concat(aliases)
 
         // Check local project files
-        let matchingLocation = await findLocationOfItem(moduleNamesToCheck, name)
-        if (matchingLocation) return matchingLocation
+        if (name) {
+          let matchingLocation = await findLocationOfItem(moduleNamesToCheck, name)
+          if (matchingLocation) return matchingLocation
+        }
 
         // Check installed Elm packages
         for (var moduleName of moduleNamesToCheck) {
@@ -367,68 +430,76 @@ const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFil
     }
 
   const findLocationOfCustomTypeVariantForModuleName = findLocationOfItemForModuleName({
-    findItemWithName: findCustomTypeVariantWithName,
+    findItemWithName: ElmSyntax.findCustomTypeVariantWithName,
     findLocationOfItem: findLocationOfCustomTypeVariantFromImportedFiles,
   })
 
   const findLocationOfDeclarationForModuleName = findLocationOfItemForModuleName({
-    findItemWithName: findDeclarationWithName,
+    findItemWithName: ElmSyntax.findDeclarationWithName,
     findLocationOfItem: findLocationOfDeclarationFromImportedFiles,
   })
 
-  const findLocationOfCustomTypeForPattern = async (pattern, range) => {
-    if (['var', 'all', 'unit', 'char', 'string', 'int', 'hex', 'float', 'record'].includes(pattern.type)) {
-      return
-    } else if (pattern.type === 'parentisized') {
-      return findLocationOfCustomTypeForPattern(pattern.parentisized.value.value, range)
-    } else if (pattern.type === 'named') {
-      let moduleName = [...pattern.named.qualified.moduleName, pattern.named.qualified.name].join('.')
+  const findLocationOfCustomTypeForPattern =
+    async (pattern: ElmSyntax.Pattern, range: vscode.Range)
+      : Promise<vscode.Location | undefined> => {
+      if (['var', 'all', 'unit', 'char', 'string', 'int', 'hex', 'float', 'record'].includes(pattern.type)) {
+        return
+      } else if (pattern.type === 'parentisized') {
+        return findLocationOfCustomTypeForPattern(pattern.parentisized.value.value, range)
+      } else if (pattern.type === 'named') {
+        let moduleName = [...pattern.named.qualified.moduleName, pattern.named.qualified.name].join('.')
 
-      // Workaround because there's no range information for the qualified
-      let args = pattern.named.patterns
-      let isNotOneOfArguments = args.every(arg => !sharedLogic.fromElmRange(arg.range).contains(position))
+        // Workaround because there's no range information for the qualified
+        let args = pattern.named.patterns
+        let isNotOneOfArguments = args.every(arg => !sharedLogic.fromElmRange(arg.range).contains(position))
 
-      if (range.contains(position) && isNotOneOfArguments) {
-        let matchingLocation = await findLocationOfCustomTypeVariantForModuleName({ doc, ast, moduleName })
-        if (matchingLocation) return matchingLocation
-      }
+        if (range.contains(position) && isNotOneOfArguments) {
+          let matchingLocation = await findLocationOfCustomTypeVariantForModuleName({ doc, ast, moduleName })
+          if (matchingLocation) return matchingLocation
+        }
 
-      for (let argument of args) {
-        let matchingLocation = await findLocationOfCustomTypeForPattern(argument.value, sharedLogic.fromElmRange(argument.range))
-        if (matchingLocation) return matchingLocation
-      }
-    } else if (pattern.type === 'uncons') {
-      let left = pattern.uncons.left
-      let right = pattern.uncons.right
+        for (let argument of args) {
+          let matchingLocation = await findLocationOfCustomTypeForPattern(argument.value, sharedLogic.fromElmRange(argument.range))
+          if (matchingLocation) return matchingLocation
+        }
+      } else if (pattern.type === 'uncons') {
+        let left = pattern.uncons.left
+        let right = pattern.uncons.right
 
-      for (let item of [left, right]) {
+        for (let item of [left, right]) {
+          let range = sharedLogic.fromElmRange(item.range)
+          if (range.contains(position)) {
+            let matchingLocation = await findLocationOfCustomTypeForPattern(item.value, range)
+            if (matchingLocation) return matchingLocation
+          }
+        }
+      } else if (pattern.type === 'list') {
+        for (let item of pattern.list.value) {
+          let range = sharedLogic.fromElmRange(item.range)
+          if (range.contains(position)) {
+            let matchingLocation = await findLocationOfCustomTypeForPattern(item.value, range)
+            if (matchingLocation) return matchingLocation
+          }
+        }
+      } else if (pattern.type === 'as') {
+        let item = pattern.as.pattern
         let range = sharedLogic.fromElmRange(item.range)
         if (range.contains(position)) {
           let matchingLocation = await findLocationOfCustomTypeForPattern(item.value, range)
           if (matchingLocation) return matchingLocation
         }
+      } else {
+        console.error('provideDefinition:error:unhandledPattern', pattern)
       }
-    } else if (pattern.type === 'list') {
-      for (let item of pattern.list.value) {
-        let range = sharedLogic.fromElmRange(item.range)
-        if (range.contains(position)) {
-          let matchingLocation = await findLocationOfCustomTypeForPattern(item.value, range)
-          if (matchingLocation) return matchingLocation
-        }
-      }
-    } else if (pattern.type === 'as') {
-      let item = pattern.as.pattern
-      let range = sharedLogic.fromElmRange(item.range)
-      if (range.contains(position)) {
-        let matchingLocation = await findLocationOfCustomTypeForPattern(item.value, range)
-        if (matchingLocation) return matchingLocation
-      }
-    } else {
-      console.error('provideDefinition:error:unhandledPattern', pattern)
     }
+
+  type FindLocationForExpressionInput = {
+    name: string
+    args: ElmSyntax.Node<ElmSyntax.Pattern>[]
+    localDeclarations: ElmSyntax.Node<ElmSyntax.Declaration>[]
   }
 
-  const findLocationForExpressionWithName = async ({ name, args, localDeclarations }) => {
+  const findLocationForExpressionWithName = async ({ name, args, localDeclarations }: FindLocationForExpressionInput): Promise<vscode.Location | undefined> => {
     // Check for if in current function's argument list
     for (let argument of args) {
       let matchingArgument = findArgumentWithMatchingName({ argument, name })
@@ -442,12 +513,14 @@ const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFil
 
     // Check through any locally scoped expressions from a let-in block
     for (let declaration of localDeclarations) {
-      let declarationName = declaration.value.function.declaration.value.name.value
-      if (declarationName === name) {
-        return new vscode.Location(
-          doc.uri,
-          sharedLogic.fromElmRange(declaration.range)
-        )
+      if (ElmSyntax.isFunctionDeclaration(declaration)) {
+        let declarationName = declaration.value.function.declaration.value.name.value
+        if (declarationName === name) {
+          return new vscode.Location(
+            doc.uri,
+            sharedLogic.fromElmRange(declaration.range)
+          )
+        }
       }
     }
 
@@ -460,7 +533,7 @@ const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFil
     if (matchingLocation) return matchingLocation
 
     // Check if this is from an Elm package
-    let moduleName = name.split('.').slice(0, -1)
+    let moduleName = name.split('.').slice(0, -1).join('.')
     let typeOrValueName = name.split('.').slice(-1)[0]
 
     if (moduleName) {
@@ -474,7 +547,10 @@ const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFil
     }
   }
 
-  const findLocationOfItemsForExpression = async (expression, args, localDeclarations) => {
+  const findLocationOfItemsForExpression = async (
+    expression: ElmSyntax.Expression,
+    args: ElmSyntax.Node<ElmSyntax.Pattern>[],
+    localDeclarations: ElmSyntax.Node<ElmSyntax.Declaration>[]): Promise<vscode.Location | undefined> => {
     if ([
       'unit',
       'hex',
@@ -564,7 +640,10 @@ const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFil
       }
 
       // Try to link to items within expression
-      let items = expression.recordUpdate.updates.map(update => update.value.expression)
+      let items: ElmSyntax.Node<ElmSyntax.Expression>[] =
+        expression.recordUpdate.updates
+          .map(update => (update.value as any).expression)
+
       for (let item of items) {
         let range = sharedLogic.fromElmRange(item.range)
         if (range.contains(position)) {
@@ -591,7 +670,7 @@ const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFil
       // Handle declarations between "let" and "in" keywords
       for (let declaration of letDeclarations) {
         let range = sharedLogic.fromElmRange(declaration.range)
-        if (range.contains(position)) {
+        if (range.contains(position) && ElmSyntax.isFunctionDeclaration(declaration)) {
           return findLocationForFunctionDeclaration(
             declaration,
             args,
@@ -627,7 +706,7 @@ const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFil
     }
   }
 
-  const findArgumentWithMatchingName = ({ argument, name }) => {
+  const findArgumentWithMatchingName = ({ argument, name }: { argument: ElmSyntax.Node<ElmSyntax.Pattern>, name: string }) => {
     if (['all', 'unit', 'char', 'string', 'int', 'hex', 'float'].includes(argument.value.type)) {
       return
     } else if (argument.value.type === 'var') {
@@ -639,13 +718,13 @@ const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFil
     }
   }
 
-  const findLocationForTypeAnnotation = async (typeAnnotation) => {
+  const findLocationForTypeAnnotation = async (typeAnnotation: ElmSyntax.TypeAnnotation): Promise<vscode.Location | undefined> => {
     if (typeAnnotation.type === 'typed') {
       let moduleNameAndName = typeAnnotation.typed.moduleNameAndName
 
       let range = sharedLogic.fromElmRange(moduleNameAndName.range)
       if (range.contains(position)) {
-        let moduleName = getNameFromModuleNameAndName(moduleNameAndName)
+        let moduleName = ElmSyntax.getNameFromModuleNameAndName(moduleNameAndName)
         let matchingLocation = await findLocationOfDeclarationForModuleName({
           doc,
           ast,
@@ -715,7 +794,13 @@ const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFil
     }
   }
 
-  const findLocationForFunctionDeclaration = async (declaration, existingArgs, localDeclarations) => {
+  const findLocationForFunctionDeclaration = async (
+    declaration: ElmSyntax.Node<{
+      type: "function"
+      function: ElmSyntax.Function_
+    }>,
+    existingArgs: ElmSyntax.Node<ElmSyntax.Pattern>[],
+    localDeclarations: ElmSyntax.Node<ElmSyntax.Declaration>[]) => {
     let func = declaration.value.function
 
     // Handle function type annotations
@@ -753,29 +838,29 @@ const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFil
     // Keep track of module import aliases
     if (import_.value.moduleAlias) {
       let alias = import_.value.moduleAlias.value[0]
-      aliasMappingToModuleNames[alias] = aliasMappingToModuleNames[alias] || []
-      aliasMappingToModuleNames[alias].push(moduleName)
+      if (alias !== undefined) {
+        aliasMappingToModuleNames[alias] = aliasMappingToModuleNames[alias] || [] as string[]
+        (aliasMappingToModuleNames[alias] as any).push(moduleName)
+      }
     }
 
     // Keep track of module import `exposing` statements
     if (import_.value.exposingList) {
 
       let type = import_.value.exposingList.value.type
-      if (type === 'explicit') {
+      if (import_.value.exposingList.value.type === 'explicit') {
+        let topLevelExposeNodes = import_.value.exposingList.value.explicit
         let isExposingAnyCustomVariants =
-          import_.value.exposingList.value.explicit
+          topLevelExposeNodes
             .some(export_ => export_.value.type === 'typeexpose')
 
         let namesOfExportedThings =
-          import_.value.exposingList.value.explicit
-            .map(export_ => {
-              let type = export_.value.type
-              return export_.value[type].name
-            })
+          topLevelExposeNodes
+            .map(node => ElmSyntax.toTopLevelExposeName(node.value))
 
         for (let exportedName of namesOfExportedThings) {
-          explicitExposingValuesForImports[exportedName] = explicitExposingValuesForImports[exportedName] || []
-          explicitExposingValuesForImports[exportedName].push(moduleName)
+          explicitExposingValuesForImports[exportedName] = explicitExposingValuesForImports[exportedName] || [] as string[]
+          (explicitExposingValuesForImports[exportedName] as string[]).push(moduleName)
         }
 
         if (isExposingAnyCustomVariants) {
@@ -792,7 +877,7 @@ const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFil
   for (let declaration of ast.declarations) {
     let range = sharedLogic.fromElmRange(declaration.range)
     if (range.contains(position)) {
-      if (declaration.value.type === 'function') {
+      if (ElmSyntax.isFunctionDeclaration(declaration)) {
         return findLocationForFunctionDeclaration(declaration, [], [])
       } else if (declaration.value.type === 'typeAlias') {
         let typeAnnotation = declaration.value.typeAlias.typeAnnotation.value
@@ -818,49 +903,7 @@ const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFil
 
 // UTILITIES
 
-const getNameFromDeclaration = (declaration) => {
-  let declarationType = declaration.value.type
-  if (declarationType === 'typedecl') {
-    return declaration.value.typedecl.name.value
-  } else if (declarationType === 'function') {
-    return declaration.value.function.declaration.value.name.value
-  } else if (declarationType === 'typeAlias') {
-    return declaration.value.typeAlias.name.value
-  } else {
-    console.error('provideDefinition:error:unhandledDeclarationType', declaration)
-  }
-}
-
-const getNameFromModuleNameAndName = (moduleNameAndName) => {
-  return [
-    ...moduleNameAndName.value.moduleName,
-    moduleNameAndName.value.name
-  ].join('.')
-}
-
-const findDeclarationWithName = (ast, name) => {
-  for (let declaration of ast.declarations) {
-    let declarationName = getNameFromDeclaration(declaration)
-    if (declarationName === name) {
-      return declaration
-    }
-  }
-}
-
-const findCustomTypeVariantWithName = (ast, name) => {
-  for (let declaration of ast.declarations) {
-    if (declaration.value.type === 'typedecl') {
-      let customTypeVariants = declaration.value.typedecl.constructors
-      for (let variant of customTypeVariants) {
-        if (variant.value.name.value === name) {
-          return variant
-        }
-      }
-    }
-  }
-}
-
-const findLocalProjectFileUri = async (elmJsonFile, moduleName) => {
+const findLocalProjectFileUri = async (elmJsonFile: ElmJsonFile, moduleName: string) => {
   // Search for a local file matching the module name
   let localFileUri =
     await Promise.all(

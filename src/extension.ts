@@ -1,21 +1,21 @@
-const vscode = require('vscode')
-const autodetectElmJson = require('./features/autodetect-elm-json')
-const elmFormatOnSave = require('./features/elm-format-on-save')
-const errorHighlighting = require('./features/error-highlighting')
-const findUsages = require('./features/find-usages')
-const inlineAutocomplete = require('./features/inline-autocomplete')
-const jumpToDefinition = require('./features/jump-to-definition')
+import vscode from "vscode"
+import autodetectElmJson, { GlobalState } from "./features/autodetect-elm-json"
+import elmFormatOnSave from "./features/elm-format-on-save"
+import errorHighlighting from "./features/error-highlighting"
+import findUsages from "./features/find-usages"
+import inlineAutocomplete from "./features/inline-autocomplete"
+import jumpToDefinition from "./features/jump-to-definition"
 
 const pluginId = `elmLand`
 let diagnostics = vscode.languages.createDiagnosticCollection(pluginId)
 
-async function activate(context) {
+async function activate(context: vscode.ExtensionContext) {
   console.info("ACTIVATE")
 
   // Global context available to functions below
-  let globalState = { elmJsonFiles: [] }
+  let globalState: GlobalState = { elmJsonFiles: [] }
   context.subscriptions.push({
-    dispose: () => { globalState = undefined }
+    dispose: () => { globalState = undefined as any }
   })
 
   // Attempt to find an elm.json file at the project root
@@ -58,7 +58,7 @@ async function activate(context) {
   context.subscriptions.push(diagnostics)
 
   // Reload and show errors anytime an "elm.json" file is saved or opened
-  const recompileElmJson = async (document) => {
+  const recompileElmJson = async (document: vscode.TextDocument) => {
     if (document.uri.fsPath.endsWith('elm.json')) {
       await autodetectElmJson(globalState)
       await errorHighlighting(globalState, diagnostics, document, 'open')
@@ -78,7 +78,7 @@ function deactivate() {
 
 
 
-module.exports = {
+export default {
   activate,
   deactivate
 }
