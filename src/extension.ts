@@ -1,10 +1,12 @@
+import * as path from "path"
 import * as vscode from "vscode"
-import autodetectElmJson, { GlobalState } from "./features/autodetect-elm-json"
+import autodetectElmJson, { GlobalState, JumpToDocDetails } from "./features/autodetect-elm-json"
 import elmFormatOnSave from "./features/elm-format-on-save"
 import errorHighlighting from "./features/error-highlighting"
 import findUsages from "./features/find-usages"
 import inlineAutocomplete from "./features/inline-autocomplete"
 import jumpToDefinition from "./features/jump-to-definition"
+import offlinePackageDocs from "./features/offline-package-docs"
 
 const pluginId = `elmLand`
 let diagnostics = vscode.languages.createDiagnosticCollection(pluginId)
@@ -13,7 +15,7 @@ export async function activate(context: vscode.ExtensionContext) {
   console.info("ACTIVATE")
 
   // Global context available to functions below
-  let globalState: GlobalState = { elmJsonFiles: [] }
+  let globalState: GlobalState = { elmJsonFiles: [], jumpToDocDetails: undefined }
   context.subscriptions.push({
     dispose: () => { globalState = undefined as any }
   })
@@ -70,6 +72,9 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.workspace.onDidSaveTextDocument(recompileElmJson)
   )
+
+  // Offline friendly package docs
+  offlinePackageDocs.enable({ globalState, context })
 }
 
 export function deactivate() {

@@ -4,6 +4,13 @@ import sharedLogic from './_shared-logic'
 
 export type GlobalState = {
   elmJsonFiles: ElmJsonFile[]
+  jumpToDocDetails: JumpToDocDetails | undefined
+}
+
+export type JumpToDocDetails = {
+  docsJsonFsPath: string
+  moduleName: string
+  typeOrValueName: string | undefined
 }
 
 export type ElmJsonFile = {

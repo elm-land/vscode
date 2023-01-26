@@ -1,0 +1,10 @@
+{
+  "targets": {
+      "Package docs": {
+          "inputs": [
+              "src/Main.elm"
+          ],
+          "output": "../../../dist/features/offline-package-docs/elm.compiled.js"
+      }
+  }
+}
