@@ -1,5 +1,5 @@
-import vscode from 'vscode'
-import child_process from "child_process"
+import * as vscode from 'vscode'
+import * as child_process from "child_process"
 
 export default {
   async provideDocumentFormattingEdits(

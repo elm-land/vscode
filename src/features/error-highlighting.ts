@@ -1,6 +1,6 @@
-import child_process from 'child_process'
-import path from 'path'
-import vscode from 'vscode'
+import * as child_process from 'child_process'
+import * as path from 'path'
+import * as vscode from 'vscode'
 import { ElmJsonFile, GlobalState } from './autodetect-elm-json'
 import sharedLogic from './_shared-logic'
 
@@ -304,20 +304,21 @@ const toDiagnosticItem = ({ filepath, problems }: ToDiagnosticItemInput): Diagno
 }
 
 const verifyEntrypointExists = async (entrypoints: string[]): Promise<string[]> => {
-  let files = await Promise.all(entrypoints.filter(verifyFileExists))
-  return files
+  let files = await Promise.all(entrypoints.map(verifyFileExists))
+  console.log({ files })
+  return files.filter(sharedLogic.isDefined)
 }
 
-const verifyFileExists = async (fsPath: string): Promise<boolean> => {
+const verifyFileExists = async (fsPath: string): Promise<string | undefined> => {
   try {
     let stats = await vscode.workspace.fs.stat(vscode.Uri.file(fsPath))
     if (stats.size > 0) {
-      return true
+      return fsPath
     } else {
-      return false
+      return undefined
     }
   } catch (_) {
-    return false
+    return undefined
   }
 }
 

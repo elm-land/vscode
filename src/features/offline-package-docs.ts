@@ -1,4 +1,4 @@
-import vscode from 'vscode'
+import * as vscode from 'vscode'
 import { GlobalState } from './autodetect-elm-json'
 
 export default (globalState: GlobalState) => {

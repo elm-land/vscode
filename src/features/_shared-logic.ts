@@ -1,4 +1,4 @@
-import vscode from 'vscode'
+import * as vscode from 'vscode'
 import * as AutodetectElmJson from './autodetect-elm-json'
 
 let findElmJsonFor = (globalState: AutodetectElmJson.GlobalState, uri: vscode.Uri) => {
@@ -6,6 +6,9 @@ let findElmJsonFor = (globalState: AutodetectElmJson.GlobalState, uri: vscode.Ur
 
   for (let elmJsonFile of globalState.elmJsonFiles) {
     for (let sourceDirectory of elmJsonFile.sourceDirectories) {
+      if (elmJsonFile.uri.fsPath === filepath) {
+        return elmJsonFile
+      }
       if (filepath.startsWith(sourceDirectory)) {
         return elmJsonFile
       }

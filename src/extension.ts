@@ -1,4 +1,4 @@
-import vscode from "vscode"
+import * as vscode from "vscode"
 import autodetectElmJson, { GlobalState } from "./features/autodetect-elm-json"
 import elmFormatOnSave from "./features/elm-format-on-save"
 import errorHighlighting from "./features/error-highlighting"
@@ -9,7 +9,7 @@ import jumpToDefinition from "./features/jump-to-definition"
 const pluginId = `elmLand`
 let diagnostics = vscode.languages.createDiagnosticCollection(pluginId)
 
-async function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   console.info("ACTIVATE")
 
   // Global context available to functions below
@@ -72,13 +72,6 @@ async function activate(context: vscode.ExtensionContext) {
   )
 }
 
-function deactivate() {
+export function deactivate() {
   console.info('DEACTIVATE')
-}
-
-
-
-export default {
-  activate,
-  deactivate
 }

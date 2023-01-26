@@ -1,4 +1,4 @@
-import vscode from 'vscode'
+import * as vscode from 'vscode'
 import { GlobalState } from './autodetect-elm-json.js'
 import * as  ElmSyntax from './elm-to-ast/index.js'
 import Grep from './find-usages/grep.js'

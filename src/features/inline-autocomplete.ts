@@ -1,6 +1,6 @@
 import { GlobalState } from './autodetect-elm-json'
 import sharedLogic from './_shared-logic'
-import vscode from 'vscode'
+import * as vscode from 'vscode'
 
 export default (globalState: GlobalState) => {
   return {

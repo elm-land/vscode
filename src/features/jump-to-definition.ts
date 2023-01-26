@@ -1,4 +1,4 @@
-import vscode from 'vscode'
+import * as vscode from 'vscode'
 import sharedLogic from './_shared-logic'
 import * as ElmSyntax from './elm-to-ast/index.js'
 import { ElmJsonFile, GlobalState } from './autodetect-elm-json'
@@ -11,7 +11,8 @@ type FindLinkToPackageDocsInput = {
   typeOrValueName?: string
 }
 
-const findLinkToPackageDocs = async ({ packages, moduleName, typeOrValueName }: FindLinkToPackageDocsInput) => {
+const findLinkToPackageDocs = async ({ packages, moduleName, typeOrValueName }: FindLinkToPackageDocsInput):
+  Promise<vscode.Location | undefined> => {
   let pathToDocsJson = packages[moduleName]
   if (pathToDocsJson) {
     let uri = vscode.Uri.file(pathToDocsJson)
@@ -31,13 +32,13 @@ const findLinkToPackageDocs = async ({ packages, moduleName, typeOrValueName }: 
       params.set('typeOrValue', typeOrValueName)
     }
 
-    // @ts-ignore
-    uri.query = params.toString()
+    (uri as any).query = params.toString()
 
-    return new vscode.Location(
-      uri,
-      sharedLogic.fromElmRange(range || [1, 1, 1, 1])
-    )
+    return undefined
+    // return new vscode.Location(
+    //   uri,
+    //   sharedLogic.fromElmRange(range || [1, 1, 1, 1])
+    // )
   }
 }
 
@@ -903,15 +904,16 @@ const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFil
 
 // UTILITIES
 
-const findLocalProjectFileUri = async (elmJsonFile: ElmJsonFile, moduleName: string) => {
+const findLocalProjectFileUri = async (elmJsonFile: ElmJsonFile, moduleName: string): Promise<vscode.Uri | undefined> => {
   // Search for a local file matching the module name
-  let localFileUri =
+  let localFileUri: vscode.Uri | undefined =
     await Promise.all(
       elmJsonFile.sourceDirectories
         .map(folder => vscode.Uri.file(folder + '/' + moduleName.split('.').join('/') + '.elm'))
         .map(fileUri => {
-          vscode.workspace.fs.stat(fileUri)
-            .then(stat => stat ? fileUri : false)
+          return (vscode.workspace.fs.stat(fileUri)
+            .then(stat => stat ? fileUri : undefined) as Promise<vscode.Uri | undefined>)
+            .catch((reason: unknown) => undefined)
         })
     )
       .then(files => files.filter(a => a)[0])
