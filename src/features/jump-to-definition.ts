@@ -37,7 +37,11 @@ export default (globalState: GlobalState) => {
       //   params.set('typeOrValue', typeOrValueName)
       // }
 
-      globalState.jumpToDocDetails = { docsJsonFsPath, moduleName, typeOrValueName }
+      globalState.jumpToDocDetails = {
+        docsJsonFsPath,
+        moduleName,
+        typeOrValueName
+      }
 
       // console.log(uri.query)
 

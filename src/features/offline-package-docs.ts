@@ -23,63 +23,73 @@ export default {
 
     // Register the "Browse Elm packages" command
     context.subscriptions.push(vscode.commands.registerCommand('elmLand.browsePackageDocs',
-      async (jumpToDocDetails: JumpToDocDetails) => {
-        console.log({ jumpToDocDetails })
-        const panel = vscode.window.createWebviewPanel(
-          'webview', // Identifies the type of the webview. Used internally
-          'Elm Packages', // Title of the panel displayed to the user
-          vscode.ViewColumn.One, // Editor column to show the new webview panel in.
-          {
-            enableScripts: true,
-            retainContextWhenHidden: true
+      async (input: JumpToDocDetails) => {
+
+        try {
+
+          let [author, package_, version] = input.docsJsonFsPath.split('/').slice(-4, -1)
+          console.log({ author, package_, version })
+
+          const panel = vscode.window.createWebviewPanel(
+            'webview', // Identifies the type of the webview. Used internally
+            `${author}/${package_}@${version} | Elm Packages`, // Title of the panel displayed to the user
+            vscode.ViewColumn.One, // Editor column to show the new webview panel in.
+            {
+              enableScripts: true,
+              retainContextWhenHidden: true
+            }
+          )
+
+          // Get docs.json JSON
+          let docsJsonUri = vscode.Uri.file(input.docsJsonFsPath)
+          let rawDocsJson = (await vscode.workspace.openTextDocument(docsJsonUri)).getText()
+
+          // Grab README text
+          let readmeUri = vscode.Uri.file(input.docsJsonFsPath.split('docs.json').join('README.md'))
+          let readme = (await vscode.workspace.openTextDocument(readmeUri)).getText()
+
+          // Local resources
+          const elmLogo = panel.webview.asWebviewUri(vscode.Uri.file(
+            path.join(context.extensionPath, 'src', 'elm-logo.png')
+          ))
+          const script = panel.webview.asWebviewUri(vscode.Uri.file(
+            path.join(context.extensionPath, 'dist', 'features', 'offline-package-docs', 'elm.compiled.js')
+          ))
+
+          function getWebviewContent() {
+            return `<!DOCTYPE html>
+                <html lang="en">
+                <head>
+                  <meta charset="UTF-8">
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                  <title>Elm Packages</title>
+                </head>
+                <body>
+                  <div id="app"></div>
+                  <script src="${script}"></script>
+                  <script>
+                    Elm.Main.init({
+                      node: document.getElementById('app'),
+                      flags: {
+                        author: "${author}",
+                        package: "${package_}",
+                        version: "${version}",
+                        moduleName: "${input.moduleName}",
+                        typeOrValueName: ${input.typeOrValueName ? `"${input.typeOrValueName}"` : `null`},
+                        elmLogoUrl: "${elmLogo}",
+                        docs: ${JSON.stringify(JSON.parse(rawDocsJson))},
+                        readme: \`${readme.split('`').join('\\`')}\`
+                      }
+                    })
+                  </script>
+                </body>
+                </html>`;
           }
-        )
 
-        // Get docs
-        let uri = vscode.Uri.file(jumpToDocDetails.docsJsonFsPath)
-        let document = await vscode.workspace.openTextDocument(uri)
-        let text = document.getText()
-        console.log({ text })
-
-        // Get path to resource on disk
-        const onDiskPath = vscode.Uri.file(
-          path.join(context.extensionPath, 'dist', 'features', 'offline-package-docs', 'elm.compiled.js')
-        );
-
-        // And get the special URI to use with the webview
-        const script = panel.webview.asWebviewUri(onDiskPath);
-
-        console.log({ script })
-        function getWebviewContent() {
-          return `<!DOCTYPE html>
-      <html lang="en">
-      <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Elm packages</title>
-      </head>
-      <body>
-          <div id="app"></div>
-          <script src="${script}"></script>
-          <script>
-            Elm.Main.init({
-              node: document.getElementById('app'),
-              flags: {
-                author: "elm",
-                package: "html",
-                version: "1.0.5",
-                moduleName: "Html",
-                typeOrValueName: "text",
-                docs: ${JSON.stringify(JSON.parse(text))}
-              }
-            })
-          </script>
-      </body>
-      </html>`;
-        }
-
-        // And set its HTML content
-        panel.webview.html = getWebviewContent()
-      }))
+          // And set its HTML content
+          panel.webview.html = getWebviewContent()
+        } catch (_) { }
+      }
+    ))
   }
 }

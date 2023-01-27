@@ -1,11 +1,30 @@
 module Documentation exposing
-    ( Documentation
-    , decoder
-    , fromJson
-    , toListOfItems
+    ( Documentation, fromJson
+    , findModuleWithName
+    , Module
+    , findAliasWithName, findBinopWithName, findUnionWithName, findValueWithName
+    , Alias, Binop, Union, Value
     )
 
+{-|
+
+@docs Documentation, fromJson
+@docs findModuleWithName
+
+@docs Module
+
+@docs findAliasWithName, findBinopWithName, findUnionWithName, findValueWithName
+
+@docs Alias, Binop, Union, Value
+
+-}
+
+import Elm.Docs
 import Json.Decode
+
+
+
+-- DOCUMENTATION
 
 
 type alias Documentation =
@@ -13,17 +32,11 @@ type alias Documentation =
     }
 
 
-toListOfItems : Module -> List String
-toListOfItems module_ =
-    module_.comment
-        |> String.lines
-        |> List.filter (String.startsWith "@docs")
-        |> List.map (String.dropLeft (String.length "@docs "))
-        |> List.concatMap (String.split ", ")
-
-
-
--- DECODING FROM JSON
+findModuleWithName : String -> Documentation -> Maybe Module
+findModuleWithName name docs =
+    docs.modules
+        |> List.filter (\mod -> mod.name == name)
+        |> List.head
 
 
 fromJson : Json.Decode.Value -> Maybe Documentation
@@ -43,65 +56,72 @@ fromJson json =
 decoder : Json.Decode.Decoder Documentation
 decoder =
     Json.Decode.map Documentation
-        (Json.Decode.list moduleDecoder)
+        (Json.Decode.list Elm.Docs.decoder)
+
+
+
+-- MODULE
 
 
 type alias Module =
-    { name : String
-    , comment : String
-    , aliases : List Alias
-    , binops : List Binop
-    , unions : List Union
-    , values : List Value
-    }
+    Elm.Docs.Module
 
 
-moduleDecoder : Json.Decode.Decoder Module
-moduleDecoder =
-    Json.Decode.map6 Module
-        (Json.Decode.field "name" Json.Decode.string)
-        (Json.Decode.field "comment" Json.Decode.string)
-        (Json.Decode.field "aliases" (Json.Decode.list aliasDecoder))
-        (Json.Decode.field "binops" (Json.Decode.list binopDecoder))
-        (Json.Decode.field "unions" (Json.Decode.list unionDecoder))
-        (Json.Decode.field "values" (Json.Decode.list valueDecoder))
+findAliasWithName : String -> Module -> Maybe Alias
+findAliasWithName name module_ =
+    module_.aliases
+        |> List.filter (.name >> (==) name)
+        |> List.head
+
+
+findBinopWithName : String -> Module -> Maybe Binop
+findBinopWithName name module_ =
+    module_.binops
+        |> List.filter (.name >> (==) name)
+        |> List.head
+
+
+findUnionWithName : String -> Module -> Maybe Union
+findUnionWithName name module_ =
+    module_.unions
+        |> List.filter (.name >> (==) name)
+        |> List.head
+
+
+findValueWithName : String -> Module -> Maybe Value
+findValueWithName name module_ =
+    module_.values
+        |> List.filter (.name >> (==) name)
+        |> List.head
+
+
+
+-- ALIAS
 
 
 type alias Alias =
-    { name : String }
+    Elm.Docs.Alias
 
 
-aliasDecoder : Json.Decode.Decoder Alias
-aliasDecoder =
-    Json.Decode.map Alias
-        (Json.Decode.field "name" Json.Decode.string)
+
+-- BINOP
 
 
 type alias Binop =
-    { name : String }
+    Elm.Docs.Binop
 
 
-binopDecoder : Json.Decode.Decoder Binop
-binopDecoder =
-    Json.Decode.map Binop
-        (Json.Decode.field "name" Json.Decode.string)
+
+-- UNION
 
 
 type alias Union =
-    { name : String }
+    Elm.Docs.Union
 
 
-unionDecoder : Json.Decode.Decoder Union
-unionDecoder =
-    Json.Decode.map Union
-        (Json.Decode.field "name" Json.Decode.string)
+
+-- VALUE
 
 
 type alias Value =
-    { name : String }
-
-
-valueDecoder : Json.Decode.Decoder Value
-valueDecoder =
-    Json.Decode.map Value
-        (Json.Decode.field "name" Json.Decode.string)
+    Elm.Docs.Value

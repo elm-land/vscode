@@ -17,5 +17,5 @@ Visual Studio Code is available for Mac, Windows, and Linux.
 
 - [x] Jump-to-definition
 - [ ] Find usages
-- [ ] Inline autocomplete
-- [ ] Offline-friendly package docs
+- [x] Offline-friendly package docs
+- [ ] Type-driven autocomplete
