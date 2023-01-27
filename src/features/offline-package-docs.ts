@@ -32,13 +32,14 @@ export default {
 
           const panel = vscode.window.createWebviewPanel(
             'webview', // Identifies the type of the webview. Used internally
-            `${author}/${package_}@${version} | Elm Packages`, // Title of the panel displayed to the user
+            `${author}/${package_}`, // Title of the panel displayed to the user
             vscode.ViewColumn.One, // Editor column to show the new webview panel in.
             {
               enableScripts: true,
               retainContextWhenHidden: true
             }
           )
+          panel.iconPath = vscode.Uri.joinPath(context.extensionUri, "src", "elm-logo.png");
 
           // Get docs.json JSON
           let docsJsonUri = vscode.Uri.file(input.docsJsonFsPath)
@@ -55,6 +56,7 @@ export default {
           const script = panel.webview.asWebviewUri(vscode.Uri.file(
             path.join(context.extensionPath, 'dist', 'features', 'offline-package-docs', 'elm.compiled.js')
           ))
+
 
           function getWebviewContent() {
             return `<!DOCTYPE html>

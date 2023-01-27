@@ -187,7 +187,7 @@ input {
     gap: 1rem;
     padding: 1rem;
     position: sticky;
-    top: 3rem;
+    top: 4rem;
     margin-left: 1em;
     z-index: 2;
 }
@@ -296,8 +296,9 @@ hr {
     border-top: solid 1px;
 }
 
+.column .markdown h1,
 .column .markdown h2 {
-    margin-top: 2em;
+    margin-top: 2rem;
     margin-bottom: 0em;
 }
 
@@ -346,24 +347,35 @@ view model =
                             , a
                                 [ class "link"
                                 , href
+                                    ("https://package.elm-lang.org/packages/$author/$package/$version"
+                                        |> String.replace "$author" model.flags.author
+                                        |> String.replace "$package" model.flags.package
+                                        |> String.replace "$version" model.flags.version
+                                    )
+                                ]
+                                [ text "Elm Package ↗" ]
+                            , a
+                                [ class "link"
+                                , href
                                     ("https://github.com/$author/$package/tree/$version"
                                         |> String.replace "$author" model.flags.author
                                         |> String.replace "$package" model.flags.package
                                         |> String.replace "$version" model.flags.version
                                     )
                                 ]
-                                [ text "Source" ]
+                                [ text "Source ↗" ]
                             ]
                         , h3 [ style "margin-bottom" "0" ] [ text "Modules" ]
-                        , Html.div [ class "form" ]
-                            [ input
-                                [ type_ "search"
-                                , value model.search
-                                , placeholder "Search..."
-                                , onInput UserChangedSearchInput
-                                ]
-                                []
-                            ]
+
+                        -- , Html.div [ class "form" ]
+                        --     [ input
+                        --         [ type_ "search"
+                        --         , value model.search
+                        --         , placeholder "Search..."
+                        --         , onInput UserChangedSearchInput
+                        --         ]
+                        --         []
+                        --     ]
                         , span [ class "links" ]
                             (docs.modules
                                 |> List.map .name
