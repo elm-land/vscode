@@ -11,7 +11,7 @@ Visual Studio Code is available for Mac, Windows, and Linux.
 
 - [x] Syntax highlighting
 - [x] Format on save
-- [x] Inline error highlighting
+- [x] Error highlighting
 
 ## Additional Features
 
