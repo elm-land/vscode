@@ -1,6 +1,5 @@
 module Main exposing (main)
 
-import Basics
 import Block
 import Browser
 import Browser.Dom
@@ -12,7 +11,9 @@ import Html.Attributes exposing (..)
 import Html.Events exposing (..)
 import Json.Decode
 import Markdown
-import Task
+import Svg exposing (Svg)
+import Svg.Attributes as Attr
+import Task exposing (Task)
 
 
 main : Program Flags Model Msg
@@ -63,7 +64,12 @@ init flags =
                 |> Maybe.andThen (Documentation.findModuleWithName flags.moduleName)
       , search = ""
       }
-    , Cmd.none
+    , case flags.typeOrValueName of
+        Just id ->
+            scrollToElementWithId id
+
+        Nothing ->
+            Cmd.none
     )
 
 
@@ -75,13 +81,14 @@ type Msg
     = UserChangedSearchInput String
     | UserClickedReadmeLink
     | UserSelectedModuleName String
-    | BrowserScrolledToTop
+    | UserSelectedModuleDeclaration String String
+    | BrowserFinishedScrolling
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        BrowserScrolledToTop ->
+        BrowserFinishedScrolling ->
             ( model, Cmd.none )
 
         UserChangedSearchInput value ->
@@ -101,6 +108,15 @@ update msg model =
                         |> Maybe.andThen (Documentation.findModuleWithName moduleName)
               }
             , scrollToTop
+            )
+
+        UserSelectedModuleDeclaration moduleName declarationName ->
+            ( { model
+                | selectedModule =
+                    model.docs
+                        |> Maybe.andThen (Documentation.findModuleWithName moduleName)
+              }
+            , scrollToElementWithId declarationName
             )
 
 
@@ -138,6 +154,9 @@ input {
 .link {
     color: var(--vscode-textLink-foreground);
     text-decoration: underline;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25em;
 }
 
 .link:hover {
@@ -353,7 +372,9 @@ view model =
                                         |> String.replace "$version" model.flags.version
                                     )
                                 ]
-                                [ text "Elm Package ↗" ]
+                                [ span [] [ text "Elm Package" ]
+                                , externalLinkIcon
+                                ]
                             , a
                                 [ class "link"
                                 , href
@@ -363,41 +384,29 @@ view model =
                                         |> String.replace "$version" model.flags.version
                                     )
                                 ]
-                                [ text "Source ↗" ]
+                                [ span [] [ text "Source" ]
+                                , externalLinkIcon
+                                ]
                             ]
                         , h3 [ style "margin-bottom" "0" ] [ text "Modules" ]
-
-                        -- , Html.div [ class "form" ]
-                        --     [ input
-                        --         [ type_ "search"
-                        --         , value model.search
-                        --         , placeholder "Search..."
-                        --         , onInput UserChangedSearchInput
-                        --         ]
-                        --         []
-                        --     ]
+                        , Html.div [ class "form" ]
+                            [ input
+                                [ type_ "search"
+                                , value model.search
+                                , placeholder "Search..."
+                                , onInput UserChangedSearchInput
+                                ]
+                                []
+                            ]
                         , span [ class "links" ]
                             (docs.modules
-                                |> List.map .name
-                                |> List.filter (isInSearchQuery model.search)
-                                |> List.map viewModuleLink
+                                |> List.map toModuleAndFunctions
+                                |> List.filterMap (toSearchResult model.search)
+                                |> List.concatMap viewSearchResult
                             )
                         ]
                     ]
 
-            -- pre
-            --     [ style "max-width" "100vw"
-            --     , style "white-space" "pre-wrap"
-            --     ]
-            --     [
-            -- code []
-            -- [ text
-            --     (docs.modules
-            --         |> List.map Documentation.toListOfItems
-            --         |> Debug.toString
-            --     )
-            -- ]
-            -- ]
             Nothing ->
                 text "Something went wrong..."
         ]
@@ -412,11 +421,76 @@ viewModuleLink name =
         [ text name ]
 
 
-isInSearchQuery : String -> String -> Bool
-isInSearchQuery query name =
+viewModuleDeclarationLink : String -> String -> Html Msg
+viewModuleDeclarationLink moduleName declarationName =
+    button
+        [ class "link"
+        , onClick (UserSelectedModuleDeclaration moduleName declarationName)
+        ]
+        [ text declarationName ]
+
+
+viewSearchResult : SearchResult -> List (Html Msg)
+viewSearchResult searchResult =
+    [ viewModuleLink searchResult.name
+    , if List.isEmpty searchResult.children then
+        text ""
+
+      else
+        div [ class "links", style "padding-left" "1rem" ]
+            (List.map (viewModuleDeclarationLink searchResult.name)
+                searchResult.children
+            )
+    ]
+
+
+type alias ModuleAndFunctions =
+    { moduleName : String
+    , declarationNames : List String
+    }
+
+
+toModuleAndFunctions : Documentation.Module -> ModuleAndFunctions
+toModuleAndFunctions module_ =
+    { moduleName = module_.name
+    , declarationNames =
+        List.concat
+            [ List.map .name module_.aliases
+            , List.map .name module_.binops
+            , List.map .name module_.unions
+            , List.map .name module_.values
+            ]
+    }
+
+
+type alias SearchResult =
+    { name : String
+    , children : List String
+    }
+
+
+toSearchResult : String -> ModuleAndFunctions -> Maybe SearchResult
+toSearchResult query { moduleName, declarationNames } =
+    let
+        children : List String
+        children =
+            List.filter (isMatch query) declarationNames
+    in
+    if String.isEmpty (String.trim query) then
+        Just { name = moduleName, children = [] }
+
+    else if List.length children > 0 || isMatch query moduleName then
+        Just { name = moduleName, children = children }
+
+    else
+        Nothing
+
+
+isMatch : String -> String -> Bool
+isMatch query text =
     String.contains
         (String.toLower query)
-        (String.toLower name)
+        (String.toLower text)
 
 
 viewBlock : Documentation -> Model -> Elm.Docs.Block -> Html Msg
@@ -437,5 +511,36 @@ viewBlock docs model block =
 scrollToTop : Cmd Msg
 scrollToTop =
     Task.perform
-        (\_ -> BrowserScrolledToTop)
+        (\_ -> BrowserFinishedScrolling)
         (Browser.Dom.setViewport 0 0)
+
+
+scrollToElementWithId : String -> Cmd Msg
+scrollToElementWithId id =
+    let
+        spaceToAccountForNavbar : Float
+        spaceToAccountForNavbar =
+            64
+
+        setViewport : Browser.Dom.Element -> Task Browser.Dom.Error ()
+        setViewport { element } =
+            Browser.Dom.setViewport 0 (element.y - spaceToAccountForNavbar)
+    in
+    Browser.Dom.getElement id
+        |> Task.andThen setViewport
+        |> Task.attempt (\_ -> BrowserFinishedScrolling)
+
+
+externalLinkIcon : Svg Msg
+externalLinkIcon =
+    Svg.svg
+        [ Attr.viewBox "0 0 30 30"
+        , Attr.width "1em"
+        , Attr.height "1em"
+        ]
+        [ Svg.path
+            [ Attr.fill "currentColor"
+            , Attr.d "M 25.980469 2.9902344 A 1.0001 1.0001 0 0 0 25.869141 3 L 20 3 A 1.0001 1.0001 0 1 0 20 5 L 23.585938 5 L 13.292969 15.292969 A 1.0001 1.0001 0 1 0 14.707031 16.707031 L 25 6.4140625 L 25 10 A 1.0001 1.0001 0 1 0 27 10 L 27 4.1269531 A 1.0001 1.0001 0 0 0 25.980469 2.9902344 z M 6 7 C 4.9069372 7 4 7.9069372 4 9 L 4 24 C 4 25.093063 4.9069372 26 6 26 L 21 26 C 22.093063 26 23 25.093063 23 24 L 23 14 L 23 11.421875 L 21 13.421875 L 21 16 L 21 24 L 6 24 L 6 9 L 14 9 L 16 9 L 16.578125 9 L 18.578125 7 L 16 7 L 14 7 L 6 7 z"
+            ]
+            []
+        ]
