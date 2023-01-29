@@ -8,6 +8,7 @@ export type GlobalState = {
 }
 
 export type JumpToDocDetails = {
+  range: vscode.Range
   docsJsonFsPath: string
   moduleName: string
   typeOrValueName: string | undefined

@@ -14,8 +14,7 @@ export default {
         }
         globalState.jumpToDocDetails = undefined
 
-        const JUMP_TO_DEFINITION = undefined
-        if (event.kind === JUMP_TO_DEFINITION) {
+        if (event.selections.some(selection => jumpToDocDetails.range.contains(selection.start))) {
           vscode.commands.executeCommand('elmLand.browsePackageDocs', jumpToDocDetails)
         }
       }

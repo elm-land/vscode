@@ -9,48 +9,37 @@ export default (globalState: GlobalState) => {
   type Packages = { [moduleName: string]: string }
 
   type FindLinkToPackageDocsInput = {
-    currentUri: vscode.Uri
+    document: vscode.TextDocument
+    position: vscode.Position
     packages: Packages
     moduleName: string
     typeOrValueName?: string
   }
 
-  const findLinkToPackageDocs = async ({ currentUri, packages, moduleName, typeOrValueName }: FindLinkToPackageDocsInput):
+  const findLinkToPackageDocs = async ({ document, position, packages, moduleName, typeOrValueName }: FindLinkToPackageDocsInput):
     Promise<vscode.Location | undefined> => {
     let docsJsonFsPath = packages[moduleName]
     if (docsJsonFsPath) {
-      let uri = vscode.Uri.from(currentUri)
+      let uri = document.uri
 
       // Find range of word
-      let otherDoc = await vscode.workspace.openTextDocument(uri)
-      let rawJsonString = otherDoc.getText()
+      let range = document.getWordRangeAtPosition(position)
 
-      let wordToFind = typeOrValueName || moduleName
-      let range = sharedLogic.findFirstOccurenceOfWordInFile(wordToFind, rawJsonString)
+      if (range) {
+        globalState.jumpToDocDetails = {
+          range,
+          docsJsonFsPath,
+          moduleName,
+          typeOrValueName
+        }
 
-      // Add metadata to request
-      // let params = new URLSearchParams()
-      // params.set('docs', 'true')
-      // params.set('docsJsonFsPath', pathToDocsJson)
-      // params.set('moduleName', moduleName)
-      // if (typeOrValueName) {
-      //   params.set('typeOrValue', typeOrValueName)
-      // }
-
-      globalState.jumpToDocDetails = {
-        docsJsonFsPath,
-        moduleName,
-        typeOrValueName
+        return new vscode.Location(
+          uri,
+          range
+        )
+      } else {
+        console.error(`provideDefinition`, `Expected range at ${position}`)
       }
-
-      // console.log(uri.query)
-
-      // vscode.commands.executeCommand('elmLand.showWebview', uri)
-      // return undefined
-      return new vscode.Location(
-        uri,
-        sharedLogic.fromElmRange([1, 1, 1, 1])
-      )
     }
   }
 
@@ -118,7 +107,8 @@ export default (globalState: GlobalState) => {
 
           // Check if this is from an Elm package
           let linkToPackageDocs = await findLinkToPackageDocs({
-            currentUri: document.uri,
+            document,
+            position,
             packages,
             moduleName
           })
@@ -138,7 +128,8 @@ export default (globalState: GlobalState) => {
 
               // Check if this is from an Elm package
               let linkToPackageDocs = await findLinkToPackageDocs({
-                currentUri: document.uri,
+                document,
+                position,
                 packages,
                 moduleName,
                 typeOrValueName: name
@@ -411,7 +402,8 @@ export default (globalState: GlobalState) => {
           // Check installed Elm packages
           for (let moduleName of otherModuleNamesToCheck) {
             let linkToPackageDocs = await findLinkToPackageDocs({
-              currentUri: doc.uri,
+              document: doc,
+              position,
               packages,
               moduleName,
               typeOrValueName: name
@@ -435,7 +427,8 @@ export default (globalState: GlobalState) => {
           // Check installed Elm packages
           for (var moduleName of moduleNamesToCheck) {
             let linkToPackageDocs = await findLinkToPackageDocs({
-              currentUri: doc.uri,
+              document: doc,
+              position,
               packages,
               moduleName,
               typeOrValueName: name
@@ -556,7 +549,8 @@ export default (globalState: GlobalState) => {
       if (moduleName) {
         // Check if this is from an Elm package
         let linkToPackageDocs = findLinkToPackageDocs({
-          currentUri: doc.uri,
+          document: doc,
+          position,
           packages,
           moduleName,
           typeOrValueName: typeOrValueName

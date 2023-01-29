@@ -61,9 +61,15 @@ view info block =
                 ]
 
 
-viewCodeBlock : String -> String -> List (Line msg) -> Html msg
-viewCodeBlock name comment header =
-    div [ class "docs-block", id name ]
+viewCodeBlock : Maybe String -> String -> String -> List (Line msg) -> Html msg
+viewCodeBlock selectedName name comment header =
+    div
+        [ class "docs-block"
+        , classList
+            [ ( "docs-block--flash", selectedName == Just name )
+            ]
+        , id name
+        ]
         [ div [ class "docs-header" ] (List.map (div []) header)
         , div [ class "docs-comment" ] [ Markdown.toHtml [ class "markdown" ] comment ]
         ]
@@ -79,7 +85,7 @@ viewValue info { name, comment, tipe } =
         nameHtml =
             toBoldLink info name
     in
-    viewCodeBlock name comment <|
+    viewCodeBlock info.selectedDeclarationName name comment <|
         case toLines info Other tipe of
             One _ line ->
                 [ nameHtml :: space :: colon :: space :: line ]
@@ -103,7 +109,7 @@ viewBinop info { name, comment, tipe } =
         nameHtml =
             toBoldLink info ("(" ++ name ++ ")")
     in
-    viewCodeBlock name comment <|
+    viewCodeBlock info.selectedDeclarationName name comment <|
         case toLines info Other tipe of
             One _ line ->
                 [ nameHtml :: space :: colon :: space :: line ]
@@ -133,7 +139,7 @@ viewAlias info { name, args, comment, tipe } =
             , equals
             ]
     in
-    viewCodeBlock name comment <|
+    viewCodeBlock info.selectedDeclarationName name comment <|
         aliasNameLine
             :: List.map indentFour (linesToList (toLines info Other tipe))
 
@@ -151,7 +157,7 @@ viewUnion info { name, comment, args, tags } =
         nameLine =
             [ keyword "type", space, toBoldLink info name, text varsString ]
     in
-    viewCodeBlock name comment <|
+    viewCodeBlock info.selectedDeclarationName name comment <|
         case tags of
             [] ->
                 [ nameLine ]
@@ -184,6 +190,7 @@ type alias Info =
     , project : String
     , version : Maybe V.Version
     , moduleName : String
+    , selectedDeclarationName : Maybe String
     , typeNameDict : TypeNameDict
     }
 
@@ -192,8 +199,8 @@ type alias TypeNameDict =
     Dict.Dict String ( String, String )
 
 
-makeInfo : String -> String -> Maybe V.Version -> String -> List Docs.Module -> Info
-makeInfo author project version moduleName docsList =
+makeInfo : String -> String -> Maybe V.Version -> String -> Maybe String -> List Docs.Module -> Info
+makeInfo author project version moduleName selectedDeclarationName docsList =
     let
         addUnion home union docs =
             Dict.insert (home ++ "." ++ union.name) ( home, union.name ) docs
@@ -201,8 +208,13 @@ makeInfo author project version moduleName docsList =
         addModule docs dict =
             List.foldl (addUnion docs.name) dict docs.unions
     in
-    Info author project version moduleName <|
-        List.foldl addModule Dict.empty docsList
+    Info
+        author
+        project
+        version
+        moduleName
+        selectedDeclarationName
+        (List.foldl addModule Dict.empty docsList)
 
 
 

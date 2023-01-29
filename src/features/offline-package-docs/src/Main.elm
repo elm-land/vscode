@@ -46,6 +46,7 @@ type alias Model =
     { flags : Flags
     , docs : Maybe Documentation
     , selectedModule : Maybe Documentation.Module
+    , selectedDeclarationName : Maybe String
     , search : String
     }
 
@@ -62,6 +63,7 @@ init flags =
       , selectedModule =
             docs
                 |> Maybe.andThen (Documentation.findModuleWithName flags.moduleName)
+      , selectedDeclarationName = flags.typeOrValueName
       , search = ""
       }
     , case flags.typeOrValueName of
@@ -97,7 +99,7 @@ update msg model =
             )
 
         UserClickedReadmeLink ->
-            ( { model | selectedModule = Nothing }
+            ( { model | selectedModule = Nothing, selectedDeclarationName = Nothing }
             , scrollToTop
             )
 
@@ -106,6 +108,7 @@ update msg model =
                 | selectedModule =
                     model.docs
                         |> Maybe.andThen (Documentation.findModuleWithName moduleName)
+                , selectedDeclarationName = Nothing
               }
             , scrollToTop
             )
@@ -115,6 +118,7 @@ update msg model =
                 | selectedModule =
                     model.docs
                         |> Maybe.andThen (Documentation.findModuleWithName moduleName)
+                , selectedDeclarationName = Just declarationName
               }
             , scrollToElementWithId declarationName
             )
@@ -324,6 +328,16 @@ hr {
 .markdown pre code {
     color: inherit;
 }
+
+/* Show flash animation when jumping to a definition */
+.docs-block--flash {
+    animation: flash 1200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes flash {
+    0% { background: var(--vscode-merge-incomingContentBackground); }
+    100% { background: 0; }
+}
 """
 
 
@@ -503,6 +517,7 @@ viewBlock docs model block =
                 model.flags.package
                 (Elm.Version.fromString model.flags.version)
                 model.flags.moduleName
+                model.selectedDeclarationName
                 docs.modules
     in
     Block.view info block
