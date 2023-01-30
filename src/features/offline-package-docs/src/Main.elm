@@ -105,7 +105,8 @@ update msg model =
 
         UserSelectedModuleName moduleName ->
             ( { model
-                | selectedModule =
+                | search = ""
+                , selectedModule =
                     model.docs
                         |> Maybe.andThen (Documentation.findModuleWithName moduleName)
                 , selectedDeclarationName = Nothing
@@ -115,7 +116,8 @@ update msg model =
 
         UserSelectedModuleDeclaration moduleName declarationName ->
             ( { model
-                | selectedModule =
+                | search = ""
+                , selectedModule =
                     model.docs
                         |> Maybe.andThen (Documentation.findModuleWithName moduleName)
                 , selectedDeclarationName = Just declarationName
@@ -235,10 +237,11 @@ hr {
 .sidebar .form::before {
     content: '🔍';
     position: absolute;
+    font-size: 10px;
     top: 50%;
-    left: 0.75em;
-    width: 1em;
-    height: 1em;
+    left: 6px;
+    width: 1rem;
+    height: 1rem;
     display: flex;
     transform: translateY(-50%);
     align-items: center;
@@ -249,7 +252,7 @@ hr {
     border: solid 1px;
     padding: 0.75em 0.75em;
     font-size: 0.75em;
-    padding-left: 3em;
+    padding-left: 26px;
 }
 
 .sidebar input::placeholder {
@@ -307,6 +310,16 @@ hr {
 
 .markdown code {
     font-family: var(--vscode-editor-font-family);
+}
+
+.markdown a:not([href^=http]) {
+    cursor: default;
+    text-decoration: inherit;
+    color: inherit;
+}
+
+.markdown a:not([href^=http]) code {
+    color: var(--vscode-textPreformat-foreground);
 }
 
 .docs-header {

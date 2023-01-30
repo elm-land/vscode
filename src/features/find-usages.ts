@@ -1,20 +1,17 @@
 import * as vscode from 'vscode'
-import { GlobalState } from './autodetect-elm-json.js'
-import * as  ElmSyntax from './elm-to-ast/index.js'
-import Grep from './find-usages/grep.js'
-import sharedLogic from './_shared-logic'
+import { GlobalState } from './autodetect-elm-json'
+import * as ElmToAst from './elm-to-ast'
+import * as ElmSyntax from './elm-to-ast/elm-syntax'
+import Grep from './elm-grep'
+import sharedLogic, { Feature } from './shared/logic'
 
+export const feature: Feature = ({ globalState, context }) => {
+  context.subscriptions.push(
+    vscode.languages.registerReferenceProvider('elm', provider(globalState))
+  )
+}
 
-// VS code has zero-based ranges and positions, so we need to decrement all values
-// returned from ElmSyntax so they work with the code editor
-const fromElmRange = (elmRange: ElmSyntax.Range): vscode.Range => new vscode.Range(
-  elmRange[0] - 1,
-  elmRange[1] - 1,
-  elmRange[2] - 1,
-  elmRange[3] - 1
-)
-
-export default (globalState: GlobalState) => {
+const provider = (globalState: GlobalState) => {
   return {
     provideReferences: async (
       document: vscode.TextDocument,
@@ -28,7 +25,7 @@ export default (globalState: GlobalState) => {
 
       if (elmJson) {
         const text = document.getText()
-        const ast = await ElmSyntax.run(text)
+        const ast = await ElmToAst.run(text)
 
         if (ast) {
           const moduleName = ElmSyntax.toModuleName(ast)
@@ -43,7 +40,7 @@ export default (globalState: GlobalState) => {
             let usageLocationsFromCurrentModule = [
               new vscode.Location(
                 document.uri,
-                fromElmRange([1, 1, 1, 1])
+                sharedLogic.fromElmRange([1, 1, 1, 1])
               )
             ]
 
@@ -67,11 +64,11 @@ const getDeclarationNameAtPosition = (ast: ElmSyntax.Ast, position: vscode.Posit
       let signatureNameValue = declaration.value.function.signature?.value.name
       let signatureNameRange =
         signatureNameValue
-          ? fromElmRange(signatureNameValue.range)
+          ? sharedLogic.fromElmRange(signatureNameValue.range)
           : undefined
 
       let declarationNameValue = declaration.value.function.declaration.value.name
-      let declarationNameRange = fromElmRange(declarationNameValue.range)
+      let declarationNameRange = sharedLogic.fromElmRange(declarationNameValue.range)
       let name = declarationNameValue.value
 
       let cursorInSignatureName = signatureNameRange && signatureNameRange.contains(position)
@@ -79,7 +76,7 @@ const getDeclarationNameAtPosition = (ast: ElmSyntax.Ast, position: vscode.Posit
         return name
       }
     } else if (declaration.value.type === 'typeAlias') {
-      let range = fromElmRange(declaration.value.typeAlias.name.range)
+      let range = sharedLogic.fromElmRange(declaration.value.typeAlias.name.range)
       let name = declaration.value.typeAlias.name.value
       if (range.contains(position)) {
         return name
@@ -99,7 +96,7 @@ const scanForUsagesOf = ({ moduleName, declarationName }: ScanForUsagesInput) =>
   const uri = vscode.Uri.file(fsPath)
   const document = await vscode.workspace.openTextDocument(uri)
   const text = document.getText()
-  const ast = await ElmSyntax.run(text)
+  const ast = await ElmToAst.run(text)
 
   if (ast) {
     const otherModuleName = ElmSyntax.toModuleName(ast)
@@ -109,7 +106,7 @@ const scanForUsagesOf = ({ moduleName, declarationName }: ScanForUsagesInput) =>
   return [
     new vscode.Location(
       uri,
-      fromElmRange([1, 1, 1, 1])
+      sharedLogic.fromElmRange([1, 1, 1, 1])
     )
   ]
 }

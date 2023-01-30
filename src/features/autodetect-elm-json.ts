@@ -1,6 +1,6 @@
 import * as path from 'path'
 import * as vscode from 'vscode'
-import sharedLogic from './_shared-logic'
+import sharedLogic from './shared/logic'
 
 export type GlobalState = {
   elmJsonFiles: ElmJsonFile[]
@@ -23,7 +23,20 @@ export type ElmJsonFile = {
   dependencies: Dependency[]
 }
 
-export default async (globalState: GlobalState) => {
+// Initially run auto-detect, and listen for changes
+export const initialize = async ({ globalState, context }: {
+  globalState: GlobalState, context: vscode.ExtensionContext
+}): Promise<void> => {
+  await run(globalState)
+
+  // If user changes the current folder, look for the "elm.json" file again
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeWorkspaceFolders(async () => await run(globalState))
+  )
+}
+
+// Rescan the file system for `elm.json` files
+export const run = async (globalState: GlobalState) => {
   let config = vscode.workspace.getConfiguration('elmLand')
 
   let settings: Settings = {

@@ -1,18 +1,25 @@
 import * as vscode from 'vscode'
 import * as child_process from "child_process"
+import { Feature } from './shared/logic'
 
-export default {
-  async provideDocumentFormattingEdits(
-    document: vscode.TextDocument,
-    options: vscode.FormattingOptions,
-    token: vscode.CancellationToken
-  ) {
-    try {
-      let text = await runElmFormat(document)
-      return [vscode.TextEdit.replace(getFullDocRange(document), text)]
-    } catch (_) {
-      return []
-    }
+export const feature: Feature = ({ context }) => {
+  context.subscriptions.push(
+    vscode.languages.registerDocumentFormattingEditProvider('elm', {
+      provideDocumentFormattingEdits
+    })
+  )
+}
+
+const provideDocumentFormattingEdits = async (
+  document: vscode.TextDocument,
+  options: vscode.FormattingOptions,
+  token: vscode.CancellationToken
+) => {
+  try {
+    let text = await runElmFormat(document)
+    return [vscode.TextEdit.replace(getFullDocRange(document), text)]
+  } catch (_) {
+    return []
   }
 }
 

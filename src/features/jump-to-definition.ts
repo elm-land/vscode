@@ -1,10 +1,16 @@
 import * as vscode from 'vscode'
-import sharedLogic from './_shared-logic'
-import * as ElmSyntax from './elm-to-ast/index.js'
+import sharedLogic, { Feature } from './shared/logic'
+import * as ElmToAst from './elm-to-ast'
+import * as ElmSyntax from './elm-to-ast/elm-syntax'
 import { ElmJsonFile, GlobalState } from './autodetect-elm-json'
 
+export const feature: Feature = ({ globalState, context }) => {
+  context.subscriptions.push(
+    vscode.languages.registerDefinitionProvider('elm', provider(globalState))
+  )
+}
 
-export default (globalState: GlobalState) => {
+const provider = (globalState: GlobalState) => {
 
   type Packages = { [moduleName: string]: string }
 
@@ -95,7 +101,7 @@ export default (globalState: GlobalState) => {
           let fileUri = await findLocalProjectFileUri(elmJsonFile, moduleName)
           if (fileUri) {
             let otherDocument = await vscode.workspace.openTextDocument(fileUri)
-            let otherAst = await ElmSyntax.run(otherDocument.getText())
+            let otherAst = await ElmToAst.run(otherDocument.getText())
             if (otherAst) {
               const otherModuleData: ElmSyntax.ModuleData = ElmSyntax.toModuleData(otherAst)
               return new vscode.Location(
@@ -141,7 +147,7 @@ export default (globalState: GlobalState) => {
               if (fileUri) {
 
                 let otherDocument = await vscode.workspace.openTextDocument(fileUri)
-                let otherAst = await ElmSyntax.run(otherDocument.getText())
+                let otherAst = await ElmToAst.run(otherDocument.getText())
 
                 if (otherAst) {
                   const topOfFileRange = ElmSyntax.toModuleData(otherAst).moduleName.range
@@ -242,7 +248,7 @@ export default (globalState: GlobalState) => {
 
             if (importedModuleNameUri) {
               let importedDoc = await vscode.workspace.openTextDocument(importedModuleNameUri)
-              let importedAst = await ElmSyntax.run(importedDoc.getText())
+              let importedAst = await ElmToAst.run(importedDoc.getText())
 
               if (importedAst) {
                 let item = findItemWithName(importedAst, moduleName)
@@ -937,7 +943,7 @@ export default (globalState: GlobalState) => {
     async provideDefinition(doc: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken) {
       const start = Date.now()
       const text = doc.getText()
-      const ast = await ElmSyntax.run(text)
+      const ast = await ElmToAst.run(text)
 
       if (ast) {
         const elmJsonFile = sharedLogic.findElmJsonFor(globalState, doc.uri)

@@ -1,8 +1,14 @@
 import { GlobalState } from './autodetect-elm-json'
-import sharedLogic from './_shared-logic'
+import sharedLogic, { Feature } from './shared/logic'
 import * as vscode from 'vscode'
 
-export default (globalState: GlobalState) => {
+export const feature: Feature = ({ globalState, context }) => {
+  context.subscriptions.push(
+    vscode.languages.registerInlineCompletionItemProvider('elm', provider(globalState))
+  )
+}
+
+const provider = (globalState: GlobalState) => {
   return {
     provideInlineCompletionItems(
       document: vscode.TextDocument,

@@ -1,64 +1,64 @@
 import * as path from 'path'
 import * as vscode from 'vscode'
-import { GlobalState, JumpToDocDetails } from './autodetect-elm-json'
+import { JumpToDocDetails } from './autodetect-elm-json'
+import { Feature } from './shared/logic'
 
-export default {
-  enable: ({ globalState, context }: { globalState: GlobalState, context: vscode.ExtensionContext }) => {
+export const feature: Feature = ({ globalState, context }) => {
 
-    // Listens for jump-to-definition events in order to trigger
-    // the offline web view
-    vscode.window.onDidChangeTextEditorSelection(event => {
-      if (globalState.jumpToDocDetails) {
-        let jumpToDocDetails: JumpToDocDetails = {
-          ...globalState.jumpToDocDetails
-        }
-        globalState.jumpToDocDetails = undefined
-
-        if (event.selections.some(selection => jumpToDocDetails.range.contains(selection.start))) {
-          vscode.commands.executeCommand('elmLand.browsePackageDocs', jumpToDocDetails)
-        }
+  // Listens for jump-to-definition events in order to trigger
+  // the offline web view
+  vscode.window.onDidChangeTextEditorSelection(event => {
+    if (globalState.jumpToDocDetails) {
+      let jumpToDocDetails: JumpToDocDetails = {
+        ...globalState.jumpToDocDetails
       }
-    })
+      globalState.jumpToDocDetails = undefined
 
-    // Register the "Browse Elm packages" command
-    context.subscriptions.push(vscode.commands.registerCommand('elmLand.browsePackageDocs',
-      async (input: JumpToDocDetails) => {
+      if (event.selections.some(selection => jumpToDocDetails.range.contains(selection.start))) {
+        vscode.commands.executeCommand('elmLand.browsePackageDocs', jumpToDocDetails)
+      }
+    }
+  })
 
-        try {
+  // Register the "Browse Elm packages" command
+  context.subscriptions.push(vscode.commands.registerCommand('elmLand.browsePackageDocs',
+    async (input: JumpToDocDetails) => {
 
-          let [author, package_, version] = input.docsJsonFsPath.split('/').slice(-4, -1)
-          console.log({ author, package_, version })
+      try {
 
-          const panel = vscode.window.createWebviewPanel(
-            'webview', // Identifies the type of the webview. Used internally
-            `${author}/${package_}`, // Title of the panel displayed to the user
-            vscode.ViewColumn.One, // Editor column to show the new webview panel in.
-            {
-              enableScripts: true,
-              retainContextWhenHidden: true
-            }
-          )
-          panel.iconPath = vscode.Uri.joinPath(context.extensionUri, "src", "elm-logo.png");
+        let [author, package_, version] = input.docsJsonFsPath.split('/').slice(-4, -1)
+        console.log({ author, package_, version })
 
-          // Get docs.json JSON
-          let docsJsonUri = vscode.Uri.file(input.docsJsonFsPath)
-          let rawDocsJson = (await vscode.workspace.openTextDocument(docsJsonUri)).getText()
+        const panel = vscode.window.createWebviewPanel(
+          'webview', // Identifies the type of the webview. Used internally
+          `${author}/${package_}`, // Title of the panel displayed to the user
+          vscode.ViewColumn.Beside, // Editor column to show the new webview panel in.
+          {
+            enableScripts: true,
+            retainContextWhenHidden: true
+          }
+        )
+        panel.iconPath = vscode.Uri.joinPath(context.extensionUri, "src", "elm-logo.png");
 
-          // Grab README text
-          let readmeUri = vscode.Uri.file(input.docsJsonFsPath.split('docs.json').join('README.md'))
-          let readme = (await vscode.workspace.openTextDocument(readmeUri)).getText()
+        // Get docs.json JSON
+        let docsJsonUri = vscode.Uri.file(input.docsJsonFsPath)
+        let rawDocsJson = (await vscode.workspace.openTextDocument(docsJsonUri)).getText()
 
-          // Local resources
-          const elmLogo = panel.webview.asWebviewUri(vscode.Uri.file(
-            path.join(context.extensionPath, 'src', 'elm-logo.png')
-          ))
-          const script = panel.webview.asWebviewUri(vscode.Uri.file(
-            path.join(context.extensionPath, 'dist', 'features', 'offline-package-docs', 'elm.compiled.js')
-          ))
+        // Grab README text
+        let readmeUri = vscode.Uri.file(input.docsJsonFsPath.split('docs.json').join('README.md'))
+        let readme = (await vscode.workspace.openTextDocument(readmeUri)).getText()
+
+        // Local resources
+        const elmLogo = panel.webview.asWebviewUri(vscode.Uri.file(
+          path.join(context.extensionPath, 'src', 'elm-logo.png')
+        ))
+        const script = panel.webview.asWebviewUri(vscode.Uri.file(
+          path.join(context.extensionPath, 'dist', 'features', 'offline-package-docs', 'elm.compiled.js')
+        ))
 
 
-          function getWebviewContent() {
-            return `<!DOCTYPE html>
+        function getWebviewContent() {
+          return `<!DOCTYPE html>
                 <html lang="en">
                 <head>
                   <meta charset="UTF-8">
@@ -85,12 +85,11 @@ export default {
                   </script>
                 </body>
                 </html>`;
-          }
+        }
 
-          // And set its HTML content
-          panel.webview.html = getWebviewContent()
-        } catch (_) { }
-      }
-    ))
-  }
+        // And set its HTML content
+        panel.webview.html = getWebviewContent()
+      } catch (_) { }
+    }
+  ))
 }

@@ -1,10 +1,38 @@
 import * as child_process from 'child_process'
 import * as path from 'path'
 import * as vscode from 'vscode'
+import * as autodetectElmJson from './autodetect-elm-json'
 import { ElmJsonFile, GlobalState } from './autodetect-elm-json'
-import sharedLogic from './_shared-logic'
+import sharedLogic, { Feature } from './shared/logic'
 
-export default async (
+let diagnostics = vscode.languages.createDiagnosticCollection(sharedLogic.pluginId)
+
+export const feature: Feature = ({ globalState, context }) => {
+  context.subscriptions.push(
+    vscode.workspace.onDidOpenTextDocument(document => run(globalState, diagnostics, document, 'open'))
+  )
+  context.subscriptions.push(
+    vscode.workspace.onDidSaveTextDocument(document => run(globalState, diagnostics, document, 'save'))
+  )
+  context.subscriptions.push(diagnostics)
+
+  // Reload and show errors anytime an "elm.json" file is saved or opened
+  const recompileElmJson = async (document: vscode.TextDocument) => {
+    if (document.uri.fsPath.endsWith('elm.json')) {
+      await autodetectElmJson.run(globalState)
+      await run(globalState, diagnostics, document, 'open')
+    }
+  }
+  context.subscriptions.push(
+    vscode.workspace.onDidOpenTextDocument(recompileElmJson)
+  )
+  context.subscriptions.push(
+    vscode.workspace.onDidSaveTextDocument(recompileElmJson)
+  )
+}
+
+
+const run = async (
   globalState: GlobalState,
   collection: vscode.DiagnosticCollection,
   document: vscode.TextDocument,

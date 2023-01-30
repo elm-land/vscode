@@ -1,5 +1,11 @@
 import * as vscode from 'vscode'
-import * as AutodetectElmJson from './autodetect-elm-json'
+import * as AutodetectElmJson from '../autodetect-elm-json'
+
+export type Feature =
+  (args: {
+    globalState: AutodetectElmJson.GlobalState,
+    context: vscode.ExtensionContext
+  }) => void
 
 let findElmJsonFor = (globalState: AutodetectElmJson.GlobalState, uri: vscode.Uri) => {
   let filepath = uri.fsPath
@@ -55,6 +61,7 @@ const isDefined = <T>(input: T | undefined): input is T =>
   input !== undefined
 
 export default {
+  pluginId: 'elmLand',
   findElmJsonFor,
   fromElmRange,
   getMappingOfPackageNameToDocJsonFilepath,
