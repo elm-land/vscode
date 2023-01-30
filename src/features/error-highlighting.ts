@@ -334,7 +334,6 @@ const toDiagnosticItem = ({ filepath, problems }: ToDiagnosticItemInput): Diagno
 
 const verifyEntrypointExists = async (entrypoints: string[]): Promise<string[]> => {
   let files = await Promise.all(entrypoints.map(verifyFileExists))
-  console.log({ files })
   return files.filter(sharedLogic.isDefined)
 }
 

@@ -14,7 +14,12 @@ export const feature: Feature = ({ globalState, context }) => {
       }
       globalState.jumpToDocDetails = undefined
 
-      if (event.selections.some(selection => jumpToDocDetails.range.contains(selection.start))) {
+      if ([
+        vscode.TextEditorSelectionChangeKind.Mouse,
+        undefined
+      ].includes(event.kind)
+        || event.selections.some(selection => jumpToDocDetails.range.contains(selection.start))
+      ) {
         vscode.commands.executeCommand('elmLand.browsePackageDocs', jumpToDocDetails)
       }
     }
@@ -27,7 +32,6 @@ export const feature: Feature = ({ globalState, context }) => {
       try {
 
         let [author, package_, version] = input.docsJsonFsPath.split('/').slice(-4, -1)
-        console.log({ author, package_, version })
 
         const panel = vscode.window.createWebviewPanel(
           'webview', // Identifies the type of the webview. Used internally
@@ -35,7 +39,8 @@ export const feature: Feature = ({ globalState, context }) => {
           vscode.ViewColumn.Beside, // Editor column to show the new webview panel in.
           {
             enableScripts: true,
-            retainContextWhenHidden: true
+            retainContextWhenHidden: true,
+            enableFindWidget: true,
           }
         )
         panel.iconPath = vscode.Uri.joinPath(context.extensionUri, "src", "elm-logo.png");

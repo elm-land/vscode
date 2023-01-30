@@ -16,6 +16,7 @@ const provider = (globalState: GlobalState) => {
   type Packages = { [moduleName: string]: string }
 
   type FindLinkToPackageDocsInput = {
+    elmJsonFile: ElmJsonFile
     document: vscode.TextDocument
     position: vscode.Position
     packages: Packages
@@ -23,7 +24,7 @@ const provider = (globalState: GlobalState) => {
     typeOrValueName?: string
   }
 
-  const findLinkToPackageDocs = async ({ document, position, packages, moduleName, typeOrValueName }: FindLinkToPackageDocsInput):
+  const findLinkToPackageDocs = async ({ elmJsonFile, document, position, packages, moduleName, typeOrValueName }: FindLinkToPackageDocsInput):
     Promise<vscode.Location | undefined> => {
     let docsJsonFsPath = packages[moduleName]
     if (docsJsonFsPath) {
@@ -32,21 +33,46 @@ const provider = (globalState: GlobalState) => {
       // Find range of word
       let range = document.getWordRangeAtPosition(position)
 
-      if (range) {
-        globalState.jumpToDocDetails = {
-          range,
-          docsJsonFsPath,
-          moduleName,
-          typeOrValueName
-        }
+      // See if this word appears in a package
+      let dependency =
+        elmJsonFile.dependencies
+          .filter(dep => dep.fsPath === docsJsonFsPath)[0]
 
-        return new vscode.Location(
-          uri,
-          range
-        )
-      } else {
-        console.error(`provideDefinition`, `Expected range at ${position}`)
+      if (dependency) {
+
+        let foundMatch =
+          typeOrValueName ?
+            dependency.docs
+              .some(
+                moduleDoc => [
+                  moduleDoc.aliases.some(item => item.name === typeOrValueName),
+                  moduleDoc.values.some(item => item.name === typeOrValueName),
+                  moduleDoc.unions.some(item =>
+                    item.name === typeOrValueName ||
+                    item.cases.some(([case_]) => case_ === typeOrValueName)
+                  )
+                ].some(boolean => boolean)
+              )
+            : dependency.docs
+              .some(moduleDoc => moduleDoc.name === moduleName) // TODO
+
+        if (range && foundMatch) {
+          globalState.jumpToDocDetails = {
+            range,
+            docsJsonFsPath,
+            moduleName,
+            typeOrValueName
+          }
+
+          return new vscode.Location(
+            uri,
+            range
+          )
+        } else {
+          console.error(`provideDefinition`, `Expected range at ${position}`)
+        }
       }
+
     }
   }
 
@@ -114,6 +140,7 @@ const provider = (globalState: GlobalState) => {
 
           // Check if this is from an Elm package
           let linkToPackageDocs = await findLinkToPackageDocs({
+            elmJsonFile,
             document,
             position,
             packages,
@@ -135,6 +162,7 @@ const provider = (globalState: GlobalState) => {
 
               // Check if this is from an Elm package
               let linkToPackageDocs = await findLinkToPackageDocs({
+                elmJsonFile,
                 document,
                 position,
                 packages,
@@ -409,6 +437,7 @@ const provider = (globalState: GlobalState) => {
           // Check installed Elm packages
           for (let moduleName of otherModuleNamesToCheck) {
             let linkToPackageDocs = await findLinkToPackageDocs({
+              elmJsonFile,
               document: doc,
               position,
               packages,
@@ -434,6 +463,7 @@ const provider = (globalState: GlobalState) => {
           // Check installed Elm packages
           for (var moduleName of moduleNamesToCheck) {
             let linkToPackageDocs = await findLinkToPackageDocs({
+              elmJsonFile,
               document: doc,
               position,
               packages,
@@ -556,6 +586,7 @@ const provider = (globalState: GlobalState) => {
       if (moduleName) {
         // Check if this is from an Elm package
         let linkToPackageDocs = findLinkToPackageDocs({
+          elmJsonFile,
           document: doc,
           position,
           packages,
