@@ -8,8 +8,6 @@ module Block exposing
     , view
     )
 
--- import Href
-
 import Dict
 import Elm.Docs as Docs
 import Elm.Type as Type
@@ -44,8 +42,8 @@ view info block =
         Docs.BinopBlock binop ->
             viewBinop info binop
 
-        Docs.AliasBlock alias ->
-            viewAlias info alias
+        Docs.AliasBlock alias_ ->
+            viewAlias info alias_
 
         Docs.UnionBlock union ->
             viewUnion info union

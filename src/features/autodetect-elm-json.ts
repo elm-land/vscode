@@ -1,5 +1,6 @@
 import * as path from 'path'
 import * as vscode from 'vscode'
+import { Dependency, ElmJsonFile } from './shared/elm-json-file'
 import sharedLogic from './shared/logic'
 
 export type GlobalState = {
@@ -12,15 +13,6 @@ export type JumpToDocDetails = {
   docsJsonFsPath: string
   moduleName: string
   typeOrValueName: string | undefined
-}
-
-export type ElmJsonFile = {
-  uri: vscode.Uri
-  rawFileContents: string
-  projectFolder: string
-  entrypoints: string[]
-  sourceDirectories: string[],
-  dependencies: Dependency[]
 }
 
 // Initially run auto-detect, and listen for changes
@@ -56,44 +48,6 @@ type Input = {
 type Settings = {
   entrypointFilepaths: string[]
 }
-
-type Dependency = {
-  packageUserAndName: string
-  packageVersion: string
-  fsPath: string
-  docs: ModuleDoc[]
-}
-
-type ModuleDoc = {
-  name: string
-  comment: string,
-  unions: Union[]
-  aliases: Alias[]
-  values: Value[]
-  binops: BinOp[]
-}
-
-type Union = {
-  name: string
-  comment: string
-  args: string[]
-  cases: [string, string[]][]
-}
-
-type Alias = {
-  name: string
-  comment: string
-  args: string[]
-  type: string
-}
-
-type Value = {
-  name: string
-  comment: string
-  type: string
-}
-
-type BinOp = unknown
 
 const isObject = (x: unknown): x is { [key: string]: unknown } =>
   (!!x && typeof x === 'object')

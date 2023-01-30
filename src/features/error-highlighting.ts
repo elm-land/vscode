@@ -2,7 +2,8 @@ import * as child_process from 'child_process'
 import * as path from 'path'
 import * as vscode from 'vscode'
 import * as autodetectElmJson from './autodetect-elm-json'
-import { ElmJsonFile, GlobalState } from './autodetect-elm-json'
+import { GlobalState } from './autodetect-elm-json'
+import { ElmJsonFile } from './shared/elm-json-file'
 import sharedLogic, { Feature } from './shared/logic'
 
 let diagnostics = vscode.languages.createDiagnosticCollection(sharedLogic.pluginId)

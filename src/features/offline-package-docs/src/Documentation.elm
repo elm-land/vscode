@@ -46,10 +46,6 @@ fromJson json =
             Just docs
 
         Err reason ->
-            let
-                _ =
-                    Debug.log "reason" reason
-            in
             Nothing
 
 

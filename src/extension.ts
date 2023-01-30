@@ -3,10 +3,10 @@ import * as AutodetectElmJson from "./features/autodetect-elm-json"
 import { GlobalState } from "./features/autodetect-elm-json"
 import * as ElmFormatOnSave from "./features/elm-format-on-save"
 import * as ErrorHighlighting from "./features/error-highlighting"
-import * as FindUsages from "./features/find-usages"
 import * as JumpToDefinition from "./features/jump-to-definition"
 import * as OfflinePackageDocs from "./features/offline-package-docs"
-import * as InlineAutocomplete from "./features/inline-autocomplete"
+import * as TypeDrivenAutocomplete from './features/type-driven-autocomplete'
+import * as FindUsages from "./features/find-usages"
 
 export async function activate(context: vscode.ExtensionContext) {
   console.info("ACTIVATE")
@@ -24,9 +24,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Additional features
   JumpToDefinition.feature({ globalState, context })
-  FindUsages.feature({ globalState, context })
   OfflinePackageDocs.feature({ globalState, context })
-  // InlineAutocomplete.feature({ globalState, context })
+  TypeDrivenAutocomplete.feature({ globalState, context })
+  // FindUsages.feature({ globalState, context })
 }
 
 export function deactivate() {

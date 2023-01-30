@@ -2,7 +2,8 @@ import * as vscode from 'vscode'
 import sharedLogic, { Feature } from './shared/logic'
 import * as ElmToAst from './elm-to-ast'
 import * as ElmSyntax from './elm-to-ast/elm-syntax'
-import { ElmJsonFile, GlobalState } from './autodetect-elm-json'
+import { GlobalState } from './autodetect-elm-json'
+import { ElmJsonFile } from './shared/elm-json-file'
 
 export const feature: Feature = ({ globalState, context }) => {
   context.subscriptions.push(

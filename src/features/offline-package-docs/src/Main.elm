@@ -82,6 +82,7 @@ init flags =
 type Msg
     = UserChangedSearchInput String
     | UserClickedReadmeLink
+    | UserClickedHeader
     | UserSelectedModuleName String
     | UserSelectedModuleDeclaration String String
     | BrowserFinishedScrolling
@@ -96,6 +97,11 @@ update msg model =
         UserChangedSearchInput value ->
             ( { model | search = value }
             , Cmd.none
+            )
+
+        UserClickedHeader ->
+            ( { model | selectedModule = Nothing, selectedDeclarationName = Nothing }
+            , scrollToTop
             )
 
         UserClickedReadmeLink ->
@@ -358,7 +364,7 @@ view : Model -> Html Msg
 view model =
     div [ class "layout" ]
         [ node "style" [] [ text css ]
-        , header [ class "navbar" ]
+        , header [ class "navbar", onClick UserClickedHeader ]
             [ img [ src model.flags.elmLogoUrl, alt "Elm Logo" ] []
             , span [ class "breadcrumbs" ]
                 [ span [] [ text model.flags.author ]

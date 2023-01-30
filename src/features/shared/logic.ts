@@ -1,5 +1,6 @@
 import * as vscode from 'vscode'
 import * as AutodetectElmJson from '../autodetect-elm-json'
+import { ElmJsonFile } from './elm-json-file'
 
 export type Feature =
   (args: {
@@ -22,7 +23,7 @@ let findElmJsonFor = (globalState: AutodetectElmJson.GlobalState, uri: vscode.Ur
   }
 }
 
-const getMappingOfPackageNameToDocJsonFilepath = (elmJsonFile: AutodetectElmJson.ElmJsonFile) => {
+const getMappingOfPackageNameToDocJsonFilepath = (elmJsonFile: ElmJsonFile) => {
   let packages: { [key: string]: string } = {}
   const dependencies = elmJsonFile.dependencies
   for (let dep of dependencies) {
