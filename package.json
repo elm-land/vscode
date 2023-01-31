@@ -2,7 +2,7 @@
   "name": "elm-land",
   "displayName": "Elm Land",
   "description": "A minimal plugin for Elm",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "icon": "src/elm-land-plugin.png",
   "publisher": "elm-land",
   "repository": "https://github.com/elm-land/vscode",
@@ -48,17 +48,47 @@
     },
     "configuration": [
       {
-        "type": "object",
         "title": "Elm Land",
         "properties": {
           "elmLand.entrypointFilepaths": {
+            "order": 0,
             "description": "The filepath to your project's Main module, relative to the elm.json file.",
             "type": "array",
             "default": [
               "src/Main.elm",
               ".elm-land/src/Main.elm"
+            ]
+          },
+          "elmLand.feature.jumpToDefinition": {
+            "description": "Enable the 'Jump-to-definition' feature",
+            "type": "boolean",
+            "default": true
+          },
+          "elmLand.feature.errorHighlighting": {
+            "description": "Enable the 'Error Highlighting' feature",
+            "type": "boolean",
+            "default": true
+          },
+          "elmLand.feature.autocomplete": {
+            "description": "Enable the 'Autocomplete' feature",
+            "type": "boolean",
+            "default": true
+          },
+          "elmLand.feature.findUsages": {
+            "description": "Enable the 'Find Usages' feature",
+            "type": "boolean",
+            "default": false
+          },
+          "elmLand.feature.offlinePackageDocs": {
+            "description": "Settings for the 'Offline Package Docs' feature",
+            "type": "string",
+            "enum": ["Enabled", "Imports only", "Disabled"],
+            "enumDescriptions": [
+              "Enable documentation links everywhere",
+              "Enable documentation links only in import statements",
+              "Disable documentation links"
             ],
-            "scope": "resource"
+            "default": "Enabled"
           }
         }
       }

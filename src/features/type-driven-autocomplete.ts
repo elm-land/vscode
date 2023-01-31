@@ -6,6 +6,10 @@ export const feature: Feature = ({ globalState, context }) => {
   context.subscriptions.push(
     vscode.languages.registerCompletionItemProvider({ scheme: 'file', language: '*' }, {
       provideCompletionItems: async (document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<vscode.CompletionItem[]> => {
+        // Allow user to disable this feature
+        const isEnabled: boolean = vscode.workspace.getConfiguration('elmLand').feature.autocomplete
+        if (!isEnabled) return []
+
         let start = Date.now()
         let elmJson = SharedLogic.findElmJsonFor(globalState, document.uri)
 

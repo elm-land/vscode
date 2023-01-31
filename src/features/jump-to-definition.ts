@@ -912,9 +912,14 @@ const provider = (globalState: GlobalState) => {
   }
   return {
     async provideDefinition(doc: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken) {
+      // Allow user to disable this feature
+      const isEnabled: boolean = vscode.workspace.getConfiguration('elmLand').feature.jumpToDefinition
+      if (!isEnabled) return
+
       const start = Date.now()
       const text = doc.getText()
       const ast = await ElmToAst.run(text)
+
 
       if (ast) {
         const elmJsonFile = sharedLogic.findElmJsonFor(globalState, doc.uri)

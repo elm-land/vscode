@@ -19,6 +19,10 @@ const provider = (globalState: GlobalState) => {
       context: vscode.ReferenceContext,
       token: vscode.CancellationToken
     ) => {
+      // Allow user to disable this feature
+      const isEnabled: boolean = vscode.workspace.getConfiguration('elmLand').feature.findUsages
+      if (!isEnabled) return
+
       const start = Date.now()
       let locations: vscode.Location[] = []
       const elmJson = sharedLogic.findElmJsonFor(globalState, document.uri)

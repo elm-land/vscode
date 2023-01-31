@@ -19,6 +19,9 @@ export const feature: Feature = ({ globalState, context }) => {
 
   // Reload and show errors anytime an "elm.json" file is saved or opened
   const recompileElmJson = async (document: vscode.TextDocument) => {
+    const isEnabled: boolean = vscode.workspace.getConfiguration('elmLand').feature.errorHighlighting
+    if (!isEnabled) return
+
     if (document.uri.fsPath.endsWith('elm.json')) {
       await autodetectElmJson.run(globalState)
       await run(globalState, diagnostics, document, 'open')
@@ -39,6 +42,13 @@ const run = async (
   document: vscode.TextDocument,
   event: 'open' | 'save'
 ) => {
+  // Allow user to disable this feature
+  const isEnabled: boolean = vscode.workspace.getConfiguration('elmLand').feature.errorHighlighting
+  if (!isEnabled) {
+    collection.clear()
+    return
+  }
+
   let uri =
     document.fileName.includes('.git')
       ? vscode.Uri.file(document.fileName.split('.git')[0] || '')

@@ -15,6 +15,7 @@ const provideDocumentFormattingEdits = async (
   options: vscode.FormattingOptions,
   token: vscode.CancellationToken
 ) => {
+  // User should disable this feature in the `[elm]` language settings
   try {
     let text = await runElmFormat(document)
     return [vscode.TextEdit.replace(getFullDocRange(document), text)]

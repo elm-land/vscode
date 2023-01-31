@@ -26,7 +26,7 @@ export async function activate(context: vscode.ExtensionContext) {
   JumpToDefinition.feature({ globalState, context })
   OfflinePackageDocs.feature({ globalState, context })
   TypeDrivenAutocomplete.feature({ globalState, context })
-  // FindUsages.feature({ globalState, context })
+  FindUsages.feature({ globalState, context })
 }
 
 export function deactivate() {

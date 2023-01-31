@@ -11,15 +11,13 @@ export const feature: Feature = ({ globalState, context }) => {
 
   vscode.languages.registerDocumentLinkProvider('elm', {
     async provideDocumentLinks(document: vscode.TextDocument, token: vscode.CancellationToken): Promise<vscode.DocumentLink[]> {
-      let start = Date.now()
-      type Settings = 'DISABLED' | 'IMPORTS_ONLY' | 'ALL_LINKS'
-      let settings: Settings = 'ALL_LINKS' as Settings
-
-      if (settings === 'DISABLED') {
-        console.info(`documentLinks`, `${Date.now() - start}ms`)
+      // Allow user to disable this feature
+      let settings: 'Enabled' | 'Disabled' | 'Imports only' = vscode.workspace.getConfiguration('elmLand').feature.offlinePackageDocs
+      if (settings === 'Disabled') {
         return []
       }
 
+      let start = Date.now()
       let text = document.getText()
       let ast = await ElmToAst.run(text)
       let uri = vscode.Uri.parse("command:elmLand.browsePackageDocs")
@@ -76,7 +74,7 @@ export const feature: Feature = ({ globalState, context }) => {
 
         }
 
-        if (settings === 'ALL_LINKS') {
+        if (settings === 'Enabled') {
           let moduleImportTracker = ElmSyntax.createModuleImportTracker(ast)
 
           const findPackageLinksInDeclaration = (declaration: ElmSyntax.Declaration): vscode.DocumentLink[] => {
