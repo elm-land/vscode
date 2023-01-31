@@ -65,12 +65,11 @@ export type TopLevelExpose
 // Declarations
 // 
 export type Declaration
-  = { type: 'function', function: Function_ }
+  = LetDeclarationExpression
   | { type: 'typeAlias', typeAlias: TypeAlias }
   | { type: 'typedecl', typedecl: TypeDecl }
   | { type: 'port', port: Signature }
   | { type: 'infix', infix: Infix }
-  | { type: 'destructuring', destructuring: Destructuring }
 
 export type Function_ = {
   documentation: Node<Documentation> | null
@@ -278,7 +277,7 @@ export type RecordSetterExpression = {
 
 export type RecordUpdateExpression = {
   name: Node<string>
-  updates: Node<Expression>[]
+  updates: Node<RecordSetterExpression>[]
 }
 
 
@@ -349,3 +348,112 @@ export const isFunctionDeclaration =
       function: Function_
     }> =>
     declaration.value.type === 'function'
+
+
+
+export type ModuleImportTracker = {
+  findImportedModuleNamesThatMightHaveExposedThisValue: (typeOrValueName: string) => string[]
+  findImportedModuleNamesForQualifiedValue: (moduleName: string) => string[]
+}
+
+export const createModuleImportTracker = (ast: Ast): ModuleImportTracker => {
+  // Need to build up a collection of which types and values
+  // are being exposed by all imports.
+  // (This will be useful later when jumping to definitions)
+  // 
+  // This starts by accounting for the stuff implicitly imported in
+  // every Elm module:
+  // 
+  //    import Basics exposing (..)
+  //    import List exposing (List, (::))
+  //    import Maybe exposing (Maybe(..))
+  //    import Result exposing (Result(..))
+  //    import String exposing (String)
+  //    import Char exposing (Char)
+  //    import Tuple
+  //    import Debug
+  //    import Platform exposing ( Program )
+  //    import Platform.Cmd as Cmd exposing ( Cmd )
+  //    import Platform.Sub as Sub exposing ( Sub )
+  // 
+  type ImportAlias = string
+  type ExposedValue = string
+  type ModuleName = string
+  let explicitExposingValuesForImports: Record<ExposedValue, ModuleName[]> = {
+    'List': ['List'],
+    '(::)': ['List'],
+    'Maybe': ['Maybe'],
+    'Just': ['Maybe'],
+    'Nothing': ['Maybe'],
+    'Result': ['Result'],
+    'Ok': ['Result'],
+    'Err': ['Result'],
+    'String': ['String'],
+    'Char': ['Char'],
+    'Program': ['Platform'],
+    'Cmd': ['Platform.Cmd'],
+    'Sub': ['Platform.Sub'],
+  }
+  let hasUnknownImportsFromExposingAll: ModuleName[] = [
+    'Basics'
+  ]
+  let aliasMappingToModuleNames: Record<ImportAlias, ModuleName[]> = {
+    'Cmd': ['Platform.Cmd'],
+    'Sub': ['Platform.Sub']
+  }
+
+  // Keep track of module import `exposing` statements
+  for (let import_ of ast.imports) {
+    const moduleNameNode = import_.value.moduleName
+    const moduleName = moduleNameNode.value.join('.')
+
+    // Keep track of module import aliases
+    if (import_.value.moduleAlias) {
+      let alias = import_.value.moduleAlias.value[0]
+      if (alias !== undefined) {
+        aliasMappingToModuleNames[alias] = aliasMappingToModuleNames[alias] || [] as string[]
+        (aliasMappingToModuleNames[alias] as any).push(moduleName)
+      }
+    }
+
+    if (import_.value.exposingList) {
+
+      let type = import_.value.exposingList.value.type
+      if (import_.value.exposingList.value.type === 'explicit') {
+        let topLevelExposeNodes = import_.value.exposingList.value.explicit
+        let isExposingAnyCustomVariants =
+          topLevelExposeNodes
+            .some(export_ => export_.value.type === 'typeexpose')
+
+        let namesOfExportedThings =
+          topLevelExposeNodes
+            .map(node => toTopLevelExposeName(node.value))
+
+        for (let exportedName of namesOfExportedThings) {
+          explicitExposingValuesForImports[exportedName] = explicitExposingValuesForImports[exportedName] || [] as string[]
+          (explicitExposingValuesForImports[exportedName] as string[]).push(moduleName)
+        }
+
+        if (isExposingAnyCustomVariants) {
+          hasUnknownImportsFromExposingAll.push(moduleName)
+        }
+      } else if (type === 'all') {
+        hasUnknownImportsFromExposingAll.push(moduleName)
+      } else {
+        console.error('provideDefinition:error:unhandledExposingListType', import_.value.exposingList.value)
+      }
+    }
+  }
+
+  return {
+    findImportedModuleNamesThatMightHaveExposedThisValue: (typeOrValueName: string): string[] => {
+      let explicitMatches = explicitExposingValuesForImports[typeOrValueName] || []
+      return explicitMatches.concat(hasUnknownImportsFromExposingAll)
+    },
+    findImportedModuleNamesForQualifiedValue: (moduleName: string): string[] => {
+      let aliases = aliasMappingToModuleNames[moduleName] || []
+      let moduleNamesToCheck = [moduleName].concat(aliases)
+      return moduleNamesToCheck
+    }
+  }
+}

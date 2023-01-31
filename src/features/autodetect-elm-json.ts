@@ -5,7 +5,7 @@ import sharedLogic from './shared/logic'
 
 export type GlobalState = {
   elmJsonFiles: ElmJsonFile[]
-  jumpToDocDetails: JumpToDocDetails | undefined
+  jumpToDocDetails: JumpToDocDetails[] | undefined
 }
 
 export type JumpToDocDetails = {

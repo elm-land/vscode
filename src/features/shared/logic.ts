@@ -56,10 +56,23 @@ const findFirstOccurenceOfWordInFile = (word: string, rawJsonString: string): [n
 const fromElmRange = (array: [number, number, number, number]): vscode.Range =>
   new vscode.Range(array[0] - 1, array[1] - 1, array[2] - 1, array[3] - 1)
 
-
-
 const isDefined = <T>(input: T | undefined): input is T =>
   input !== undefined
+
+const doesModuleExposesValue = (elmJsonFile: ElmJsonFile, moduleName: string, typeOrValueName: string) => {
+  for (let dependency of elmJsonFile.dependencies) {
+    for (let moduleDoc of dependency.docs) {
+      if (moduleDoc.name === moduleName) {
+        return [
+          ...moduleDoc.aliases.map(x => x.name),
+          ...moduleDoc.unions.map(x => x.name),
+          ...moduleDoc.values.map(x => x.name),
+        ].some(name => name === typeOrValueName)
+      }
+    }
+  }
+  return false
+}
 
 export default {
   pluginId: 'elmLand',
@@ -67,5 +80,6 @@ export default {
   fromElmRange,
   getMappingOfPackageNameToDocJsonFilepath,
   findFirstOccurenceOfWordInFile,
-  isDefined
+  isDefined,
+  doesModuleExposesValue
 }
