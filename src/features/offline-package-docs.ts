@@ -1,19 +1,22 @@
-import * as path from 'path'
-import * as vscode from 'vscode'
-import * as ElmToAst from './elm-to-ast'
-import * as ElmSyntax from './elm-to-ast/elm-syntax'
-import SharedLogic from './shared/logic'
-import { JumpToDocDetails } from './autodetect-elm-json'
-import { Feature } from './shared/logic'
-import { ElmJsonFile } from './shared/elm-json-file'
+import * as path from "path"
+import * as vscode from "vscode"
+import * as ElmToAst from "./elm-to-ast"
+import * as ElmSyntax from "./elm-to-ast/elm-syntax"
+import SharedLogic from "./shared/logic"
+import { JumpToDocDetails } from "./autodetect-elm-json"
+import { Feature } from "./shared/logic"
+import { ElmJsonFile } from "./shared/elm-json-file"
 
 export const feature: Feature = ({ globalState, context }) => {
-
-  vscode.languages.registerDocumentLinkProvider('elm', {
-    async provideDocumentLinks(document: vscode.TextDocument, token: vscode.CancellationToken): Promise<vscode.DocumentLink[]> {
+  vscode.languages.registerDocumentLinkProvider("elm", {
+    async provideDocumentLinks(
+      document: vscode.TextDocument,
+      token: vscode.CancellationToken
+    ): Promise<vscode.DocumentLink[]> {
       // Allow user to disable this feature
-      let settings: 'Enabled' | 'Disabled' | 'Imports only' = vscode.workspace.getConfiguration('elmLand').feature.offlinePackageDocs
-      if (settings === 'Disabled') {
+      let settings: "Enabled" | "Disabled" | "Imports only" =
+        vscode.workspace.getConfiguration("elmLand").feature.offlinePackageDocs
+      if (settings === "Disabled") {
         return []
       }
 
@@ -25,7 +28,8 @@ export const feature: Feature = ({ globalState, context }) => {
 
       if (elmJsonFile && ast) {
         let foo: ElmJsonFile = elmJsonFile
-        let packages = SharedLogic.getMappingOfPackageNameToDocJsonFilepath(elmJsonFile)
+        let packages =
+          SharedLogic.getMappingOfPackageNameToDocJsonFilepath(elmJsonFile)
         let details: JumpToDocDetails[] = []
         let links: vscode.DocumentLink[] = []
 
@@ -33,14 +37,14 @@ export const feature: Feature = ({ globalState, context }) => {
           // Add links to imports
           let moduleNameNode = importNode.value.moduleName
           let range = SharedLogic.fromElmRange(moduleNameNode.range)
-          let moduleName = moduleNameNode.value.join('.')
+          let moduleName = moduleNameNode.value.join(".")
           let docsJsonFsPath = packages[moduleName]
           if (docsJsonFsPath) {
             details.push({
               range,
               docsJsonFsPath,
               moduleName,
-              typeOrValueName: undefined
+              typeOrValueName: undefined,
             })
             links.push({ range, target: uri })
 
@@ -52,49 +56,68 @@ export const feature: Feature = ({ globalState, context }) => {
                 range,
                 docsJsonFsPath,
                 moduleName,
-                typeOrValueName: undefined
+                typeOrValueName: undefined,
               })
               links.push({ range, target: uri })
             }
 
             let explicitlyExposed = importNode.value.exposingList?.value
-            if (explicitlyExposed?.type === 'explicit') {
+            if (explicitlyExposed?.type === "explicit") {
               for (let explicitExposedValue of explicitlyExposed.explicit) {
                 let range = SharedLogic.fromElmRange(explicitExposedValue.range)
                 details.push({
                   range,
                   docsJsonFsPath,
                   moduleName,
-                  typeOrValueName: ElmSyntax.toTopLevelExposeName(explicitExposedValue.value)
+                  typeOrValueName: ElmSyntax.toTopLevelExposeName(
+                    explicitExposedValue.value
+                  ),
                 })
                 links.push({ range, target: uri })
               }
             }
           }
-
         }
 
-        if (settings === 'Enabled') {
+        if (settings === "Enabled") {
           let moduleImportTracker = ElmSyntax.createModuleImportTracker(ast)
 
-          const findPackageLinksInDeclaration = (declaration: ElmSyntax.Declaration): vscode.DocumentLink[] => {
+          const findPackageLinksInDeclaration = (
+            declaration: ElmSyntax.Declaration
+          ): vscode.DocumentLink[] => {
             let links: vscode.DocumentLink[] = []
             switch (declaration.type) {
-              case 'destructuring':
-                return findPackageLinksInExpression(declaration.destructuring.expression)
-              case 'function':
-                if (declaration.function.signature?.value.typeAnnotation.value) {
-                  links.push(...findPackageLinksInAnnotation(declaration.function.signature.value.typeAnnotation))
+              case "destructuring":
+                return findPackageLinksInExpression(
+                  declaration.destructuring.expression
+                )
+              case "function":
+                if (
+                  declaration.function.signature?.value.typeAnnotation.value
+                ) {
+                  links.push(
+                    ...findPackageLinksInAnnotation(
+                      declaration.function.signature.value.typeAnnotation
+                    )
+                  )
                 }
-                links.push(...findPackageLinksInExpression(declaration.function.declaration.value.expression))
+                links.push(
+                  ...findPackageLinksInExpression(
+                    declaration.function.declaration.value.expression
+                  )
+                )
                 return links
-              case 'infix':
+              case "infix":
                 return []
-              case 'port':
-                return findPackageLinksInAnnotation(declaration.port.typeAnnotation)
-              case 'typeAlias':
-                return findPackageLinksInAnnotation(declaration.typeAlias.typeAnnotation)
-              case 'typedecl':
+              case "port":
+                return findPackageLinksInAnnotation(
+                  declaration.port.typeAnnotation
+                )
+              case "typeAlias":
+                return findPackageLinksInAnnotation(
+                  declaration.typeAlias.typeAnnotation
+                )
+              case "typedecl":
                 for (let constructor of declaration.typedecl.constructors) {
                   for (let arg of constructor.value.arguments) {
                     links.push(...findPackageLinksInAnnotation(arg))
@@ -104,100 +127,136 @@ export const feature: Feature = ({ globalState, context }) => {
             }
           }
 
-          const findPackageLinksInExpression = (expression: ElmSyntax.Node<ElmSyntax.Expression>): vscode.DocumentLink[] => {
+          const findPackageLinksInExpression = (
+            expression: ElmSyntax.Node<ElmSyntax.Expression>
+          ): vscode.DocumentLink[] => {
             let links: vscode.DocumentLink[] = []
 
             switch (expression.value.type) {
-              case 'unit':
-              case 'glsl':
-              case 'integer':
-              case 'charLiteral':
-              case 'literal':
-              case 'float':
-              case 'hex':
-              case 'negation':
-              case 'operator':
-              case 'operatorapplication':
-              case 'prefixoperator':
-              case 'recordAccessFunction':
+              case "unit":
+              case "glsl":
+              case "integer":
+              case "charLiteral":
+              case "literal":
+              case "float":
+              case "hex":
+              case "negation":
+              case "operator":
+              case "operatorapplication":
+              case "prefixoperator":
+              case "recordAccessFunction":
                 return []
-              case 'ifBlock':
+              case "ifBlock":
                 for (let node of [
                   expression.value.ifBlock.then,
                   expression.value.ifBlock.else,
-                  expression.value.ifBlock.clause
+                  expression.value.ifBlock.clause,
                 ]) {
                   links.push(...findPackageLinksInExpression(node))
                 }
                 return links
-              case 'lambda':
+              case "lambda":
                 for (let pattern of expression.value.lambda.patterns) {
                   links.push(...findPackageLinksInPattern(pattern))
                 }
-                links.push(...findPackageLinksInExpression(expression.value.lambda.expression))
+                links.push(
+                  ...findPackageLinksInExpression(
+                    expression.value.lambda.expression
+                  )
+                )
                 return links
-              case 'let':
+              case "let":
                 for (let declaration of expression.value.let.declarations) {
-                  links.push(...findPackageLinksInDeclaration(declaration.value))
+                  links.push(
+                    ...findPackageLinksInDeclaration(declaration.value)
+                  )
                 }
-                links.push(...findPackageLinksInExpression(expression.value.let.expression))
+                links.push(
+                  ...findPackageLinksInExpression(
+                    expression.value.let.expression
+                  )
+                )
                 return links
-              case 'list':
+              case "list":
                 for (let node of expression.value.list) {
                   links.push(...findPackageLinksInExpression(node))
                 }
                 return links
-              case 'parenthesized':
-                return findPackageLinksInExpression(expression.value.parenthesized)
-              case 'record':
+              case "parenthesized":
+                return findPackageLinksInExpression(
+                  expression.value.parenthesized
+                )
+              case "record":
                 for (let node of expression.value.record) {
-                  links.push(...findPackageLinksInExpression(node.value.expression))
+                  links.push(
+                    ...findPackageLinksInExpression(node.value.expression)
+                  )
                 }
                 return links
-              case 'recordAccess':
+              case "recordAccess":
                 // TODO: What's `recordAccess.name`?
-                links.push(...findPackageLinksInExpression(expression.value.recordAccess.expression))
+                links.push(
+                  ...findPackageLinksInExpression(
+                    expression.value.recordAccess.expression
+                  )
+                )
                 return links
-              case 'recordUpdate':
+              case "recordUpdate":
                 for (let node of expression.value.recordUpdate.updates) {
-                  links.push(...findPackageLinksInExpression(node.value.expression))
+                  links.push(
+                    ...findPackageLinksInExpression(node.value.expression)
+                  )
                 }
                 return links
-              case 'tupled':
+              case "tupled":
                 for (let node of expression.value.tupled) {
                   links.push(...findPackageLinksInExpression(node))
                 }
                 return links
-              case 'application':
+              case "application":
                 for (let node of expression.value.application) {
                   links.push(...findPackageLinksInExpression(node))
                 }
                 return links
-              case 'case':
-                links = findPackageLinksInExpression(expression.value.case.expression)
+              case "case":
+                links = findPackageLinksInExpression(
+                  expression.value.case.expression
+                )
                 for (let node of expression.value.case.cases) {
                   links.push(...findPackageLinksInPattern(node.pattern))
                   links.push(...findPackageLinksInExpression(node.expression))
                 }
                 return links
-              case 'functionOrValue':
-                let moduleName = expression.value.functionOrValue.moduleName.join('.')
+              case "functionOrValue":
+                let moduleName =
+                  expression.value.functionOrValue.moduleName.join(".")
                 let typeOrValueName = expression.value.functionOrValue.name
 
-                let moduleNames = (expression.value.functionOrValue.moduleName.length > 0)
-                  ? moduleImportTracker.findImportedModuleNamesForQualifiedValue(moduleName)
-                  : moduleImportTracker.findImportedModuleNamesThatMightHaveExposedThisValue(typeOrValueName)
+                let moduleNames =
+                  expression.value.functionOrValue.moduleName.length > 0
+                    ? moduleImportTracker.findImportedModuleNamesForQualifiedValue(
+                        moduleName
+                      )
+                    : moduleImportTracker.findImportedModuleNamesThatMightHaveExposedThisValue(
+                        typeOrValueName
+                      )
 
                 for (let moduleName of moduleNames) {
                   let docsJsonFsPath = packages[moduleName]
                   if (docsJsonFsPath) {
-                    if (SharedLogic.doesModuleExposesValue(foo, moduleName, typeOrValueName)) {
+                    if (
+                      SharedLogic.doesModuleExposesValue(
+                        foo,
+                        moduleName,
+                        typeOrValueName
+                      )
+                    ) {
                       let range = SharedLogic.fromElmRange(expression.range)
                       details.push({
                         range,
                         docsJsonFsPath,
                         moduleName,
-                        typeOrValueName
+                        typeOrValueName,
                       })
                       links.push({ range, target: uri })
                       return links
@@ -208,49 +267,80 @@ export const feature: Feature = ({ globalState, context }) => {
             }
           }
 
-          const findPackageLinksInAnnotation = (annotation: ElmSyntax.Node<ElmSyntax.TypeAnnotation>): vscode.DocumentLink[] => {
+          const findPackageLinksInAnnotation = (
+            annotation: ElmSyntax.Node<ElmSyntax.TypeAnnotation>
+          ): vscode.DocumentLink[] => {
             let links: vscode.DocumentLink[] = []
             switch (annotation.value.type) {
-              case 'function':
-                links.push(...findPackageLinksInAnnotation(annotation.value.function.left))
-                links.push(...findPackageLinksInAnnotation(annotation.value.function.right))
+              case "function":
+                links.push(
+                  ...findPackageLinksInAnnotation(
+                    annotation.value.function.left
+                  )
+                )
+                links.push(
+                  ...findPackageLinksInAnnotation(
+                    annotation.value.function.right
+                  )
+                )
                 return links
-              case 'generic':
+              case "generic":
                 return []
-              case 'genericRecord':
+              case "genericRecord":
                 for (let field of annotation.value.genericRecord.values.value) {
-                  links.push(...findPackageLinksInAnnotation(field.value.typeAnnotation))
+                  links.push(
+                    ...findPackageLinksInAnnotation(field.value.typeAnnotation)
+                  )
                 }
                 return links
-              case 'record':
+              case "record":
                 for (let field of annotation.value.record.value) {
-                  links.push(...findPackageLinksInAnnotation(field.value.typeAnnotation))
+                  links.push(
+                    ...findPackageLinksInAnnotation(field.value.typeAnnotation)
+                  )
                 }
                 return links
-              case 'tupled':
+              case "tupled":
                 for (let annotation_ of annotation.value.tupled.values) {
                   links.push(...findPackageLinksInAnnotation(annotation_))
                 }
                 return links
-              case 'typed':
-                let moduleName = annotation.value.typed.moduleNameAndName.value.moduleName.join('.')
-                let typeOrValueName = annotation.value.typed.moduleNameAndName.value.name
+              case "typed":
+                let moduleName =
+                  annotation.value.typed.moduleNameAndName.value.moduleName.join(
+                    "."
+                  )
+                let typeOrValueName =
+                  annotation.value.typed.moduleNameAndName.value.name
 
-
-                let moduleNames = (annotation.value.typed.moduleNameAndName.value.moduleName.length > 0)
-                  ? moduleImportTracker.findImportedModuleNamesForQualifiedValue(moduleName)
-                  : moduleImportTracker.findImportedModuleNamesThatMightHaveExposedThisValue(typeOrValueName)
+                let moduleNames =
+                  annotation.value.typed.moduleNameAndName.value.moduleName
+                    .length > 0
+                    ? moduleImportTracker.findImportedModuleNamesForQualifiedValue(
+                        moduleName
+                      )
+                    : moduleImportTracker.findImportedModuleNamesThatMightHaveExposedThisValue(
+                        typeOrValueName
+                      )
 
                 for (let moduleName of moduleNames) {
                   let docsJsonFsPath = packages[moduleName]
                   if (docsJsonFsPath) {
-                    if (SharedLogic.doesModuleExposesValue(foo, moduleName, typeOrValueName)) {
-                      let range = SharedLogic.fromElmRange(annotation.value.typed.moduleNameAndName.range)
+                    if (
+                      SharedLogic.doesModuleExposesValue(
+                        foo,
+                        moduleName,
+                        typeOrValueName
+                      )
+                    ) {
+                      let range = SharedLogic.fromElmRange(
+                        annotation.value.typed.moduleNameAndName.range
+                      )
                       details.push({
                         range,
                         docsJsonFsPath,
                         moduleName,
-                        typeOrValueName
+                        typeOrValueName,
                       })
                       links.push({ range, target: uri })
                     }
@@ -262,13 +352,14 @@ export const feature: Feature = ({ globalState, context }) => {
                 }
 
                 return links
-              case 'unit':
+              case "unit":
                 return []
-
             }
           }
 
-          const findPackageLinksInPattern = (pattern: ElmSyntax.Node<ElmSyntax.Pattern>): vscode.DocumentLink[] => {
+          const findPackageLinksInPattern = (
+            pattern: ElmSyntax.Node<ElmSyntax.Pattern>
+          ): vscode.DocumentLink[] => {
             return []
           }
 
@@ -284,28 +375,36 @@ export const feature: Feature = ({ globalState, context }) => {
         console.info(`documentLinks`, `${Date.now() - start}ms`)
         return []
       }
-    }
+    },
   })
 
   // Register the "Browse Elm packages" command
-  context.subscriptions.push(vscode.commands.registerCommand('elmLand.browsePackageDocs',
-    async () => {
-      let cursorPosition: vscode.Position | undefined = vscode.window.activeTextEditor?.selection.active
+  context.subscriptions.push(
+    vscode.commands.registerCommand("elmLand.browsePackageDocs", async () => {
+      let cursorPosition: vscode.Position | undefined =
+        vscode.window.activeTextEditor?.selection.active
 
       // Get input from global variable, then clear it's value
       if (!globalState.jumpToDocDetails || cursorPosition === undefined) return
-      let input: JumpToDocDetails = globalState.jumpToDocDetails.find(item =>
-        item.range.contains(new vscode.Position(cursorPosition?.line || 0, cursorPosition?.character || 0))
+      let input: JumpToDocDetails = globalState.jumpToDocDetails.find((item) =>
+        item.range.contains(
+          new vscode.Position(
+            cursorPosition?.line || 0,
+            cursorPosition?.character || 0
+          )
+        )
       ) as JumpToDocDetails
       // globalState.jumpToDocDetails = undefined
 
       if (!input) return
 
       try {
-        let [author, package_, version] = input.docsJsonFsPath.split('/').slice(-4, -1)
+        let [author, package_, version] = input.docsJsonFsPath
+          .split("/")
+          .slice(-4, -1)
 
         const panel = vscode.window.createWebviewPanel(
-          'webview', // Identifies the type of the webview. Used internally
+          "webview", // Identifies the type of the webview. Used internally
           `${author}/${package_}`, // Title of the panel displayed to the user
           vscode.ViewColumn.Beside, // Editor column to show the new webview panel in.
           {
@@ -314,24 +413,46 @@ export const feature: Feature = ({ globalState, context }) => {
             enableFindWidget: true,
           }
         )
-        panel.iconPath = vscode.Uri.joinPath(context.extensionUri, "src", "elm-logo.png");
+        panel.iconPath = vscode.Uri.joinPath(
+          context.extensionUri,
+          "src",
+          "elm-logo.png"
+        )
 
         // Get docs.json JSON
         let docsJsonUri = vscode.Uri.file(input.docsJsonFsPath)
-        let rawDocsJson = (await vscode.workspace.openTextDocument(docsJsonUri)).getText()
+        let rawDocsJson = (
+          await vscode.workspace.openTextDocument(docsJsonUri)
+        ).getText()
 
         // Grab README text
-        let readmeUri = vscode.Uri.file(input.docsJsonFsPath.split('docs.json').join('README.md'))
-        let readme = (await vscode.workspace.openTextDocument(readmeUri)).getText()
+        let readmeUri = vscode.Uri.file(
+          input.docsJsonFsPath.split("docs.json").join("README.md")
+        )
+        let readme = (
+          await vscode.workspace.openTextDocument(readmeUri)
+        ).getText()
 
         // Local resources
-        const elmLogo = panel.webview.asWebviewUri(vscode.Uri.file(
-          path.join(context.extensionPath, 'src', 'elm-logo.png')
-        ))
-        const script = panel.webview.asWebviewUri(vscode.Uri.file(
-          path.join(context.extensionPath, 'dist', 'features', 'offline-package-docs', 'elm.compiled.js')
-        ))
+        const elmLogo = panel.webview.asWebviewUri(
+          vscode.Uri.file(
+            path.join(context.extensionPath, "src", "elm-logo.png")
+          )
+        )
+        const script = panel.webview.asWebviewUri(
+          vscode.Uri.file(
+            path.join(
+              context.extensionPath,
+              "dist",
+              "features",
+              "offline-package-docs",
+              "elm.compiled.js"
+            )
+          )
+        )
 
+        let toJsonString = (json: unknown): string =>
+          JSON.stringify(json).split("</").join("<\\/")
 
         function getWebviewContent() {
           return `<!DOCTYPE html>
@@ -352,20 +473,24 @@ export const feature: Feature = ({ globalState, context }) => {
                         package: "${package_}",
                         version: "${version}",
                         moduleName: "${input.moduleName}",
-                        typeOrValueName: ${input.typeOrValueName ? `"${input.typeOrValueName}"` : `null`},
+                        typeOrValueName: ${
+                          input.typeOrValueName
+                            ? `"${input.typeOrValueName}"`
+                            : `null`
+                        },
                         elmLogoUrl: "${elmLogo}",
-                        docs: ${JSON.stringify(JSON.parse(rawDocsJson))},
-                        readme: \`${readme.split('`').join('\\`')}\`
+                        docs: ${toJsonString(JSON.parse(rawDocsJson))},
+                        readme: ${toJsonString(readme)}
                       }
                     })
                   </script>
                 </body>
-                </html>`;
+                </html>`
         }
 
         // And set its HTML content
         panel.webview.html = getWebviewContent()
-      } catch (_) { }
-    }
-  ))
+      } catch (_) {}
+    })
+  )
 }

@@ -2,7 +2,7 @@
   "name": "elm-land",
   "displayName": "Elm Land",
   "description": "A minimal plugin for Elm",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "icon": "src/elm-land-plugin.png",
   "publisher": "elm-land",
   "repository": "https://github.com/elm-land/vscode",
@@ -82,7 +82,11 @@
           "elmLand.feature.offlinePackageDocs": {
             "description": "Settings for the 'Offline Package Docs' feature",
             "type": "string",
-            "enum": ["Enabled", "Imports only", "Disabled"],
+            "enum": [
+              "Enabled",
+              "Imports only",
+              "Disabled"
+            ],
             "enumDescriptions": [
               "Enable documentation links everywhere",
               "Enable documentation links only in import statements",
@@ -126,6 +130,7 @@
     "@types/node": "18.11.18",
     "@types/vscode": "1.74.0",
     "chokidar-cli": "3.0.0",
+    "terser": "5.16.3",
     "typescript": "4.9.4"
   }
 }
