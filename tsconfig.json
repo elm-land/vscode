@@ -11,5 +11,6 @@
     "noUncheckedIndexedAccess": true,
 		"rootDir": "src"
 	},
+	"include": ["src"],
 	"exclude": ["node_modules", ".vscode-test", "examples"]
 }

@@ -35,7 +35,7 @@ export const run = async (globalState: GlobalState) => {
     entrypointFilepaths: config.get('entrypointFilepaths') || []
   }
 
-  let elmJsonFileUris = await vscode.workspace.findFiles('elm.json')
+  let elmJsonFileUris = await vscode.workspace.findFiles('**/elm.json', '**/node_modules/**', 10)
   let possibleElmJsonFiles = await Promise.all(toElmJsonFiles({ elmJsonFileUris, settings }))
   globalState.elmJsonFiles = possibleElmJsonFiles.filter(sharedLogic.isDefined)
 }
@@ -126,6 +126,7 @@ const toElmJsonFiles = ({ settings, elmJsonFileUris }: Input): Promise<ElmJsonFi
 
           let toDocsJson = async (packageUserAndName: string, packageVersion: string) => {
             let fsPath = toDocsFilepath(packageUserAndName, packageVersion)
+            // TODO: Make sure that docs are installed before running this step
             let buffer = await vscode.workspace.fs.readFile(vscode.Uri.file(fsPath))
             let contents = Buffer.from(buffer).toString('utf8')
             let json = JSON.parse(contents)
@@ -157,7 +158,7 @@ const toElmJsonFiles = ({ settings, elmJsonFileUris }: Input): Promise<ElmJsonFi
         }
         return elmJsonFile
       }
-    } catch (_) {
-      console.error(`Failed to parse elm.json`, fileContents)
+    } catch (reason) {
+      console.error(`Failed to parse elm.json`, { uri: uri.fsPath, contents: fileContents, reason })
     }
   })
