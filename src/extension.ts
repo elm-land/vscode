@@ -7,6 +7,7 @@ import * as JumpToDefinition from "./features/jump-to-definition"
 import * as OfflinePackageDocs from "./features/offline-package-docs"
 import * as TypeDrivenAutocomplete from './features/type-driven-autocomplete'
 import * as FindUsages from "./features/find-usages"
+import * as HtmlToElm from './features/html-to-elm'
 
 export async function activate(context: vscode.ExtensionContext) {
   console.info("ACTIVATE")
@@ -27,6 +28,7 @@ export async function activate(context: vscode.ExtensionContext) {
   OfflinePackageDocs.feature({ globalState, context })
   TypeDrivenAutocomplete.feature({ globalState, context })
   FindUsages.feature({ globalState, context })
+  HtmlToElm.feature({ globalState, context })
 }
 
 export function deactivate() {

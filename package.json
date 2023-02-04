@@ -2,7 +2,7 @@
   "name": "elm-land",
   "displayName": "Elm Land",
   "description": "A minimal plugin for Elm",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "icon": "src/elm-land-plugin.png",
   "publisher": "elm-land",
   "repository": "https://github.com/elm-land/vscode",
@@ -12,11 +12,12 @@
   "scripts": {
     "start": "npm install && npm run watch",
     "build": "npm run build:elm && npm run build:typescript",
-    "build:elm": "npm run build:elm-to-ast && npm run build:elm-offline-docs",
+    "build:elm": "npm run build:elm-to-ast && npm run build:elm-offline-docs && npm run build:elm-html-to-elm",
     "build:elm-to-ast": "(cd src/features/elm-to-ast && elm make src/Worker.elm --output=dist/worker.js --optimize && mkdir -p ../../../dist/features/elm-to-ast && terser dist/worker.js --compress 'pure_funcs=[F2,F3,F4,F5,F6,F7,F8,F9,A2,A3,A4,A5,A6,A7,A8,A9],pure_getters,keep_fargs=false,unsafe_comps,unsafe' | terser --mangle --output ../../../dist/features/elm-to-ast/worker.min.js)",
     "build:elm-offline-docs": "(cd src/features/offline-package-docs && mkdir -p ../../../dist/features/offline-package-docs && elm make src/Main.elm --optimize --output=../../../dist/features/offline-package-docs/elm.compiled.js && terser ../../../dist/features/offline-package-docs/elm.compiled.js --compress 'pure_funcs=[F2,F3,F4,F5,F6,F7,F8,F9,A2,A3,A4,A5,A6,A7,A8,A9],pure_getters,keep_fargs=false,unsafe_comps,unsafe' | terser --mangle --output ../../../dist/features/offline-package-docs/elm.compiled.js)",
+    "build:elm-html-to-elm": "(cd src/features/html-to-elm && mkdir -p ../../../dist/features/html-to-elm && elm make src/Main.elm --optimize --output=../../../dist/features/html-to-elm/elm.compiled.js && terser ../../../dist/features/html-to-elm/elm.compiled.js --compress 'pure_funcs=[F2,F3,F4,F5,F6,F7,F8,F9,A2,A3,A4,A5,A6,A7,A8,A9],pure_getters,keep_fargs=false,unsafe_comps,unsafe' | terser --mangle --output ../../../dist/features/html-to-elm/elm.compiled.js)",
     "build:typescript": "tsc",
-    "watch": "npm run build && (npm run watch:elm && npm run watch:typescript)",
+    "watch": "npm run build && (npm run watch:elm & npm run watch:typescript)",
     "watch:elm": "chokidar src/features/offline-package-docs/src -c \"npm run build:elm-offline-docs\"",
     "watch:typescript": "tsc -w",
     "vscode:prepublish": "npm run build"
@@ -34,7 +35,14 @@
       {
         "category": "Elm Land",
         "title": "Browse Elm package documentation",
-        "command": "elmLand.browsePackageDocs"
+        "command": "elmLand.browsePackageDocs",
+        "enablement": "false"
+      },
+      {
+        "category": "Elm Land",
+        "title": "Convert Html to Elm",
+        "command": "elmLand.htmlToElm",
+        "enablement": "false"
       }
     ],
     "configurationDefaults": {
@@ -60,26 +68,25 @@
             ]
           },
           "elmLand.feature.jumpToDefinition": {
+            "order": 1,
             "description": "Enable the 'Jump-to-definition' feature",
             "type": "boolean",
             "default": true
           },
-          "elmLand.feature.errorHighlighting": {
-            "description": "Enable the 'Error Highlighting' feature",
-            "type": "boolean",
-            "default": true
-          },
-          "elmLand.feature.autocomplete": {
-            "description": "Enable the 'Autocomplete' feature",
-            "type": "boolean",
-            "default": true
-          },
           "elmLand.feature.findUsages": {
+            "order": 2,
             "description": "Enable the 'Find Usages' feature",
             "type": "boolean",
             "default": false
           },
+          "elmLand.feature.errorHighlighting": {
+            "order": 3,
+            "description": "Enable the 'Error Highlighting' feature",
+            "type": "boolean",
+            "default": true
+          },
           "elmLand.feature.offlinePackageDocs": {
+            "order": 4,
             "description": "Settings for the 'Offline Package Docs' feature",
             "type": "string",
             "enum": [
@@ -93,6 +100,18 @@
               "Disable documentation links"
             ],
             "default": "Enabled"
+          },
+          "elmLand.feature.autocomplete": {
+            "order": 5,
+            "description": "Enable the 'Autocomplete' feature",
+            "type": "boolean",
+            "default": true
+          },
+          "elmLand.feature.htmlToElm": {
+            "order": 6,
+            "description": "Enable the 'HTML to Elm' feature",
+            "type": "boolean",
+            "default": true
           }
         }
       }
