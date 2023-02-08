@@ -59,19 +59,22 @@ const fromElmRange = (array: [number, number, number, number]): vscode.Range =>
 const isDefined = <T>(input: T | undefined): input is T =>
   input !== undefined
 
-const doesModuleExposesValue = (elmJsonFile: ElmJsonFile, moduleName: string, typeOrValueName: string) => {
+const doesModuleExposesValue = (elmJsonFile: ElmJsonFile, moduleName: string, typeOrValueName: string) : string | undefined => {
   for (let dependency of elmJsonFile.dependencies) {
     for (let moduleDoc of dependency.docs) {
       if (moduleDoc.name === moduleName) {
-        return [
-          ...moduleDoc.aliases.map(x => x.name),
-          ...moduleDoc.unions.map(x => x.name),
-          ...moduleDoc.values.map(x => x.name),
-        ].some(name => name === typeOrValueName)
+        let match = [
+          ...moduleDoc.aliases.map(x => ({ typeOrValueName: x.name, items: [ x.name ] })),
+          ...moduleDoc.unions.map(x => ({ typeOrValueName: x.name, items: [x.name, ...x.cases.map(([caseName]) => caseName)] })),
+          ...moduleDoc.values.map(x => ({ typeOrValueName: x.name, items: [ x.name ] })),
+        ].find(obj => obj.items.includes(typeOrValueName))
+        if (match) {
+          return match.typeOrValueName
+        }
       }
     }
   }
-  return false
+  return undefined
 }
 
 

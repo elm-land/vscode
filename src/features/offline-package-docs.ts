@@ -230,7 +230,7 @@ export const feature: Feature = ({ globalState, context }) => {
               case "functionOrValue":
                 let moduleName =
                   expression.value.functionOrValue.moduleName.join(".")
-                let typeOrValueName = expression.value.functionOrValue.name
+                let functionOrValueName = expression.value.functionOrValue.name
 
                 let moduleNames =
                   expression.value.functionOrValue.moduleName.length > 0
@@ -238,19 +238,18 @@ export const feature: Feature = ({ globalState, context }) => {
                         moduleName
                       )
                     : moduleImportTracker.findImportedModuleNamesThatMightHaveExposedThisValue(
-                        typeOrValueName
+                      functionOrValueName
                       )
 
                 for (let moduleName of moduleNames) {
                   let docsJsonFsPath = packages[moduleName]
                   if (docsJsonFsPath) {
-                    if (
-                      SharedLogic.doesModuleExposesValue(
-                        foo,
-                        moduleName,
-                        typeOrValueName
-                      )
-                    ) {
+                    let typeOrValueName = SharedLogic.doesModuleExposesValue(
+                      foo,
+                      moduleName,
+                      functionOrValueName
+                    )
+                    if (typeOrValueName) {
                       let range = SharedLogic.fromElmRange(expression.range)
                       details.push({
                         range,
@@ -310,7 +309,7 @@ export const feature: Feature = ({ globalState, context }) => {
                   annotation.value.typed.moduleNameAndName.value.moduleName.join(
                     "."
                   )
-                let typeOrValueName =
+                let typedAnnotationName =
                   annotation.value.typed.moduleNameAndName.value.name
 
                 let moduleNames =
@@ -320,19 +319,18 @@ export const feature: Feature = ({ globalState, context }) => {
                         moduleName
                       )
                     : moduleImportTracker.findImportedModuleNamesThatMightHaveExposedThisValue(
-                        typeOrValueName
+                        typedAnnotationName
                       )
 
                 for (let moduleName of moduleNames) {
                   let docsJsonFsPath = packages[moduleName]
                   if (docsJsonFsPath) {
-                    if (
-                      SharedLogic.doesModuleExposesValue(
-                        foo,
-                        moduleName,
-                        typeOrValueName
-                      )
-                    ) {
+                    let typeOrValueName = SharedLogic.doesModuleExposesValue(
+                      foo,
+                      moduleName,
+                      typedAnnotationName
+                    )
+                    if (typeOrValueName) {
                       let range = SharedLogic.fromElmRange(
                         annotation.value.typed.moduleNameAndName.range
                       )

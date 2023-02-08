@@ -12,18 +12,7 @@ export const feature: Feature = ({ globalState, context }) => {
 }
 
 const provider = (globalState: GlobalState) => {
-
   type Packages = { [moduleName: string]: string }
-
-  type FindLinkToPackageDocsInput = {
-    elmJsonFile: ElmJsonFile
-    document: vscode.TextDocument
-    position: vscode.Position
-    packages: Packages
-    moduleName: string
-    typeOrValueName?: string
-  }
-
 
   type HandleJumpLinksInput = {
     doc: vscode.TextDocument

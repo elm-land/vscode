@@ -25,8 +25,18 @@ export const feature: Feature = ({ globalState, context }) => {
           let match = textBeforeCursor.match(regex)
 
           if (match) {
-            let moduleNameTheUserTyped = match[0].slice(0, -1)
             let packages: Record<ModuleName, vscode.CompletionItem[]> = {}
+            let moduleNameTheUserTyped = match[0].slice(0, -1)
+
+            let aliasMap = getAliasesForCurrentFile(document)
+            for (let [alias, moduleNames] of Object.entries(aliasMap)) {
+              for (let moduleName of moduleNames) {
+                packages[alias] = packages[moduleName] || []
+              }
+            }
+
+            let matchingAliasedModules = aliasMap[moduleNameTheUserTyped]
+            let moduleName = matchingAliasedModules && matchingAliasedModules[0] || moduleNameTheUserTyped
 
             let elmStuffFolder = path.join(elmJson.projectFolder, 'elm-stuff', '0.19.1')
             let elmiFilepaths = await vscode.workspace.fs.readDirectory(vscode.Uri.file(elmStuffFolder))
@@ -36,9 +46,9 @@ export const feature: Feature = ({ globalState, context }) => {
             for (let [filename] of elmiFilepaths) {
               if (filename.endsWith('.elmi')) {
                 let dashSeparated = filename.slice(0, -'.elmi'.length)
-                let moduleName = dashSeparated.split('-').join('.')
-                if (moduleName.startsWith(moduleNameTheUserTyped)) {
-                  allModuleNames.push(moduleName)
+                let elmiModuleName = dashSeparated.split('-').join('.')
+                if (elmiModuleName.startsWith(moduleName)) {
+                  allModuleNames.push(elmiModuleName)
                 }
               }
             }
@@ -47,7 +57,7 @@ export const feature: Feature = ({ globalState, context }) => {
             let packageModuleDocs : [ModuleDoc, Dependency][] = []
             for (let dependency of elmJson.dependencies) {
               for (let moduleDoc of dependency.docs) {
-                if (moduleDoc.name.startsWith(moduleNameTheUserTyped)) {
+                if (moduleDoc.name.startsWith(moduleName)) {
                   packageModuleDocs.push([moduleDoc, dependency])
                   allModuleNames.push(moduleDoc.name)
                 }
@@ -61,16 +71,6 @@ export const feature: Feature = ({ globalState, context }) => {
                 dependency.packageUserAndName
               )
             }
-
-            let aliasMap = getAliasesForCurrentFile(document)
-            for (let [alias, moduleNames] of Object.entries(aliasMap)) {
-              for (let moduleName of moduleNames) {
-                packages[alias] = packages[moduleName] || []
-              }
-            }
-
-            let matchingAliasedModules = aliasMap[moduleNameTheUserTyped]
-            let moduleName = matchingAliasedModules && matchingAliasedModules[0] || moduleNameTheUserTyped
 
             let value = packages[moduleName]
 
