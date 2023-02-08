@@ -349,7 +349,21 @@ export const isFunctionDeclaration =
     }> =>
     declaration.value.type === 'function'
 
+export const isTypeAliasDeclaration =
+  (declaration: Node<Declaration>)
+    : declaration is Node<{
+      type: 'typeAlias';
+      typeAlias: TypeAlias;
+    }> =>
+    declaration.value.type === 'typeAlias'
 
+export const isCustomTypeDeclaration =
+  (declaration: Node<Declaration>)
+    : declaration is Node<{
+      type: 'typedecl';
+      typedecl: TypeDecl;
+    }> =>
+    declaration.value.type === 'typedecl'
 
 export type ModuleImportTracker = {
   findImportedModuleNamesThatMightHaveExposedThisValue: (typeOrValueName: string) => string[]

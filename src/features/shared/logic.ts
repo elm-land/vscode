@@ -74,6 +74,25 @@ const doesModuleExposesValue = (elmJsonFile: ElmJsonFile, moduleName: string, ty
   return false
 }
 
+
+const keepFilesThatExist = async (fsPath: string[]): Promise<string[]> => {
+  let files = await Promise.all(fsPath.map(verifyFileExists))
+  return files.filter(isDefined)
+}
+
+const verifyFileExists = async (fsPath: string): Promise<string | undefined> => {
+  try {
+    let stats = await vscode.workspace.fs.stat(vscode.Uri.file(fsPath))
+    if (stats.size > 0) {
+      return fsPath
+    } else {
+      return undefined
+    }
+  } catch (_) {
+    return undefined
+  }
+}
+
 export default {
   pluginId: 'elmLand',
   findElmJsonFor,
@@ -81,5 +100,6 @@ export default {
   getMappingOfPackageNameToDocJsonFilepath,
   findFirstOccurenceOfWordInFile,
   isDefined,
-  doesModuleExposesValue
+  doesModuleExposesValue,
+  keepFilesThatExist
 }

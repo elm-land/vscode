@@ -77,7 +77,7 @@ const run = async (
     collection.clear()
 
     if (elmJsonFile) {
-      let entrypoints = await verifyEntrypointExists(elmJsonFile.entrypoints)
+      let entrypoints = await sharedLogic.keepFilesThatExist(elmJsonFile.entrypoints)
       let elmFilesToCompile = isElmFile ? entrypoints.concat([uri.fsPath]) : entrypoints
 
       if (elmFilesToCompile.length > 0) {
@@ -339,24 +339,6 @@ const toDiagnosticItem = ({ filepath, problems }: ToDiagnosticItemInput): Diagno
   return {
     fsPath: filepath,
     diagnostics
-  }
-}
-
-const verifyEntrypointExists = async (entrypoints: string[]): Promise<string[]> => {
-  let files = await Promise.all(entrypoints.map(verifyFileExists))
-  return files.filter(sharedLogic.isDefined)
-}
-
-const verifyFileExists = async (fsPath: string): Promise<string | undefined> => {
-  try {
-    let stats = await vscode.workspace.fs.stat(vscode.Uri.file(fsPath))
-    if (stats.size > 0) {
-      return fsPath
-    } else {
-      return undefined
-    }
-  } catch (_) {
-    return undefined
   }
 }
 

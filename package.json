@@ -142,8 +142,7 @@
   },
   "dependencies": {
     "elm": "0.19.1-5",
-    "elm-format": "0.8.5",
-    "elmi-to-json": "1.4.3"
+    "elm-format": "0.8.5"
   },
   "devDependencies": {
     "@types/node": "18.11.18",
