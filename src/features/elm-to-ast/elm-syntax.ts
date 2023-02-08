@@ -471,3 +471,40 @@ export const createModuleImportTracker = (ast: Ast): ModuleImportTracker => {
     }
   }
 }
+
+export const fromTypeAnnotationToString = (node : Node<TypeAnnotation>) : string => {
+  switch (node.value.type) {
+    case 'function':
+      return [ fromTypeAnnotationToString(node.value.function.left),
+        fromTypeAnnotationToString(node.value.function.right)
+      ].join(' -> ') 
+    case 'generic':
+      return node.value.generic.value
+    case 'genericRecord':
+      let fields = node.value.genericRecord.values.value
+      return fields.length === 0
+        ? `{}`
+        : `{ ${node.value.genericRecord.name.value} | ${fields.map(fromRecordFieldToString).join(', ')} }`
+    case 'record':
+      let recordFields = node.value.record.value
+      return recordFields.length === 0
+        ? `{}`
+        : `{ ${recordFields.map(fromRecordFieldToString).join(', ')} }`
+    case 'tupled':
+      let tupledFields = node.value.tupled.values
+      return tupledFields.length === 0
+        ? '()'
+        : `( ${tupledFields.map(fromTypeAnnotationToString).join(', ')} )`
+    case 'typed':
+      let typeArgs = node.value.typed.args.length === 0 
+        ? '' 
+        : ' ' + node.value.typed.args.map(fromTypeAnnotationToString).join(' ')
+      return `${getNameFromModuleNameAndName(node.value.typed.moduleNameAndName)}${typeArgs}`
+    case 'unit':
+      return '()'
+  }
+}
+
+const fromRecordFieldToString = (node: Node<RecordFieldAnnotation>) : string => {
+  return `${node.value.name.value} : ${fromTypeAnnotationToString(node.value.typeAnnotation)}`
+}

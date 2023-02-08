@@ -1,6 +1,6 @@
 import path = require('path')
 import * as vscode from 'vscode'
-import { Alias, BinOp, ElmJsonFile, ModuleDoc, Union, Value } from './shared/elm-json-file'
+import { Alias, BinOp, Dependency, ElmJsonFile, ModuleDoc, Union, Value } from './shared/elm-json-file'
 import SharedLogic, { Feature } from './shared/logic'
 import * as ElmToAst from './elm-to-ast'
 import * as ElmSyntax from './elm-to-ast/elm-syntax'
@@ -21,29 +21,54 @@ export const feature: Feature = ({ globalState, context }) => {
           let range = new vscode.Range(line.range.start, position)
           let textBeforeCursor = document.getText(range)
 
-          let packages: Record<ModuleName, vscode.CompletionItem[]> = {}
-
-          for (let dependency of elmJson.dependencies) {
-            for (let moduleDoc of dependency.docs) {
-              packages[moduleDoc.name] = toCompletionItems(
-                moduleDoc,
-                dependency.packageUserAndName
-              )
-            }
-          }
-
-          let aliasMap = getAliasesForCurrentFile(document)
-          for (let [alias, moduleNames] of Object.entries(aliasMap)) {
-            for (let moduleName of moduleNames) {
-              packages[alias] = packages[moduleName] || []
-            }
-          }
-
           let regex = /((?:[A-Z][_A-Za-z]+\.)+)$/
           let match = textBeforeCursor.match(regex)
 
           if (match) {
             let moduleNameTheUserTyped = match[0].slice(0, -1)
+            let packages: Record<ModuleName, vscode.CompletionItem[]> = {}
+
+            let elmStuffFolder = path.join(elmJson.projectFolder, 'elm-stuff', '0.19.1')
+            let elmiFilepaths = await vscode.workspace.fs.readDirectory(vscode.Uri.file(elmStuffFolder))
+
+            // Get a list of all local project modules starting with that name
+            let allModuleNames : string[] = []
+            for (let [filename] of elmiFilepaths) {
+              if (filename.endsWith('.elmi')) {
+                let dashSeparated = filename.slice(0, -'.elmi'.length)
+                let moduleName = dashSeparated.split('-').join('.')
+                if (moduleName.startsWith(moduleNameTheUserTyped)) {
+                  allModuleNames.push(moduleName)
+                }
+              }
+            }
+
+            // Include all the package module names
+            let packageModuleDocs : [ModuleDoc, Dependency][] = []
+            for (let dependency of elmJson.dependencies) {
+              for (let moduleDoc of dependency.docs) {
+                if (moduleDoc.name.startsWith(moduleNameTheUserTyped)) {
+                  packageModuleDocs.push([moduleDoc, dependency])
+                  allModuleNames.push(moduleDoc.name)
+                }
+              }
+            }
+
+            for (let [moduleDoc, dependency] of packageModuleDocs) {
+              packages[moduleDoc.name] = toCompletionItems(
+                moduleDoc,
+                allModuleNames,
+                dependency.packageUserAndName
+              )
+            }
+
+            let aliasMap = getAliasesForCurrentFile(document)
+            for (let [alias, moduleNames] of Object.entries(aliasMap)) {
+              for (let moduleName of moduleNames) {
+                packages[alias] = packages[moduleName] || []
+              }
+            }
+
             let matchingAliasedModules = aliasMap[moduleNameTheUserTyped]
             let moduleName = matchingAliasedModules && matchingAliasedModules[0] || moduleNameTheUserTyped
 
@@ -59,7 +84,8 @@ export const feature: Feature = ({ globalState, context }) => {
             if (elmJsonFile) {
               let moduleDoc = await findLocalElmModuleDoc({ elmJsonFile, moduleName })
               if (moduleDoc) {
-                return toCompletionItems(moduleDoc)
+                console.info(`autocomplete`, `${Date.now() - start}ms`)
+                return toCompletionItems(moduleDoc, allModuleNames)
               }
             }
           }
@@ -119,6 +145,21 @@ const toModuleDoc = (ast: ElmSyntax.Ast): ModuleDoc => {
     }
   }
 
+  let areCasesExposed = (unionName: string) : boolean => {
+    if (moduleDefinition.exposingList.value.type === 'all') {
+      return true
+    } else {
+      moduleDefinition.exposingList.value.explicit.find(node => {
+        if (node.value.type === 'typeexpose') {
+          if (node.value.typeexpose.name === unionName) {
+            return true
+          }
+        }
+      })
+    }
+    return false
+  }
+
 
   let aliases: Alias[] = []
   let unions: Union[] = []
@@ -145,12 +186,17 @@ const toModuleDoc = (ast: ElmSyntax.Ast): ModuleDoc => {
         }
         aliases.push(alias)
       } else if (ElmSyntax.isCustomTypeDeclaration(declarationNode)) {
+        let shouldExposeVariants = areCasesExposed(declarationNode.value.typedecl.name.value)
         let union: Union = {
           name: declarationNode.value.typedecl.name.value,
           comment: declarationNode.value.typedecl.documentation?.value || '',
           args: declarationNode.value.typedecl.generics.map(node => node.value),
-          // Note: intentially dropping case arguments for now
-          cases: declarationNode.value.typedecl.constructors.map(node => [node.value.name.value, []])
+          cases: shouldExposeVariants
+            ? declarationNode.value.typedecl.constructors.map(node => [
+            node.value.name.value, 
+            node.value.arguments.map(ElmSyntax.fromTypeAnnotationToString)
+          ])
+          : []
         }
         unions.push(union)
       }
@@ -170,13 +216,33 @@ const toModuleDoc = (ast: ElmSyntax.Ast): ModuleDoc => {
 
 // COMPLETION ITEMS
 
-const toCompletionItems = (moduleDoc: ModuleDoc, packageUserAndName?: string): vscode.CompletionItem[] => {
+const toCompletionItems = (moduleDoc: ModuleDoc, allModuleNames: string[], packageUserAndName?: string): vscode.CompletionItem[] => {
+  let subModules = Object.keys(
+    allModuleNames
+      .filter(name => name.startsWith(moduleDoc.name))
+      .reduce((obj : Record<string, boolean>, name : string) => {
+        let partAfterThisModule = name.slice(moduleDoc.name.length + 1).split('.')
+        if (partAfterThisModule[0]) {
+          obj[partAfterThisModule[0]] = true
+        }
+        return obj
+      }, {})
+  )
   return [
+    ...subModules.map(toNamespaceCompletionItem(packageUserAndName)),
     ...moduleDoc.aliases.map(toAliasCompletionItem(packageUserAndName)),
-    ...moduleDoc.unions.map(toUnionCompletionItem(packageUserAndName)),
+    ...moduleDoc.unions.flatMap(toUnionCompletionItems(packageUserAndName)),
     ...moduleDoc.values.map(toValueCompletionItem(packageUserAndName)),
   ]
 }
+
+const toNamespaceCompletionItem = (packageUserAndName?: string) => (moduleName : string) : vscode.CompletionItem => ({
+  label: {
+    label: moduleName,
+    description: packageUserAndName
+  },
+  kind: vscode.CompletionItemKind.Module
+})
 
 const toAliasCompletionItem = (packageUserAndName?: string) => (alias: Alias): vscode.CompletionItem => ({
   label: {
@@ -197,14 +263,29 @@ const toBinopCompletionItem = (packageUserAndName?: string) => (binop: BinOp): v
   documentation: new vscode.MarkdownString(binop.comment)
 })
 
-const toUnionCompletionItem = (packageUserAndName?: string) => (union: Union): vscode.CompletionItem => ({
-  label: {
-    label: union.name,
-    description: packageUserAndName
-  },
-  kind: vscode.CompletionItemKind.TypeParameter,
-  documentation: new vscode.MarkdownString(union.comment)
-})
+const toUnionCompletionItems = (packageUserAndName?: string) => (union: Union): vscode.CompletionItem[] => {
+  let unionName = [union.name, ...union.args].join(' ')
+  let typeCompletionItem : vscode.CompletionItem = {
+    label: {
+      label: unionName,
+      description: packageUserAndName
+    },
+    kind: vscode.CompletionItemKind.TypeParameter,
+    documentation: new vscode.MarkdownString(union.comment)
+  }
+  let exposedConstructors : vscode.CompletionItem[] =
+    union.cases.map(([name, args]) => ({
+      label: {
+        label: name,
+        description: packageUserAndName,
+        detail: simplifyAnnotation([...args, unionName].join(' -> ')),
+      },
+      kind: vscode.CompletionItemKind.Constructor,
+      documentation: new vscode.MarkdownString(union.comment)
+    }))
+  
+  return [ typeCompletionItem ].concat(exposedConstructors)
+}
 
 
 const toValueCompletionItem = (packageUserAndName?: string) => (value: Value): vscode.CompletionItem => ({
