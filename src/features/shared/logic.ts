@@ -1,5 +1,5 @@
 import * as vscode from 'vscode'
-import * as AutodetectElmJson from '../autodetect-elm-json'
+import * as AutodetectElmJson from './autodetect-elm-json'
 import { ElmJsonFile } from './elm-json-file'
 
 export type Feature =
@@ -59,14 +59,14 @@ const fromElmRange = (array: [number, number, number, number]): vscode.Range =>
 const isDefined = <T>(input: T | undefined): input is T =>
   input !== undefined
 
-const doesModuleExposesValue = (elmJsonFile: ElmJsonFile, moduleName: string, typeOrValueName: string) : string | undefined => {
+const doesModuleExposesValue = (elmJsonFile: ElmJsonFile, moduleName: string, typeOrValueName: string): string | undefined => {
   for (let dependency of elmJsonFile.dependencies) {
     for (let moduleDoc of dependency.docs) {
       if (moduleDoc.name === moduleName) {
         let match = [
-          ...moduleDoc.aliases.map(x => ({ typeOrValueName: x.name, items: [ x.name ] })),
+          ...moduleDoc.aliases.map(x => ({ typeOrValueName: x.name, items: [x.name] })),
           ...moduleDoc.unions.map(x => ({ typeOrValueName: x.name, items: [x.name, ...x.cases.map(([caseName]) => caseName)] })),
-          ...moduleDoc.values.map(x => ({ typeOrValueName: x.name, items: [ x.name ] })),
+          ...moduleDoc.values.map(x => ({ typeOrValueName: x.name, items: [x.name] })),
         ].find(obj => obj.items.includes(typeOrValueName))
         if (match) {
           return match.typeOrValueName

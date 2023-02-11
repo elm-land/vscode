@@ -1,7 +1,7 @@
 import * as path from 'path'
 import * as vscode from 'vscode'
-import { Dependency, ElmJsonFile } from './shared/elm-json-file'
-import sharedLogic from './shared/logic'
+import { Dependency, ElmJsonFile } from './elm-json-file'
+import sharedLogic from './logic'
 
 export type GlobalState = {
   elmJsonFiles: ElmJsonFile[]

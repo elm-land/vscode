@@ -1,6 +1,6 @@
 import * as vscode from "vscode"
-import * as AutodetectElmJson from "./features/autodetect-elm-json"
-import { GlobalState } from "./features/autodetect-elm-json"
+import * as AutodetectElmJson from "./features/shared/autodetect-elm-json"
+import { GlobalState } from "./features/shared/autodetect-elm-json"
 import * as ElmFormatOnSave from "./features/elm-format-on-save"
 import * as ErrorHighlighting from "./features/error-highlighting"
 import * as JumpToDefinition from "./features/jump-to-definition"

@@ -3,7 +3,7 @@ import * as vscode from "vscode"
 import * as ElmToAst from "./shared/elm-to-ast"
 import * as ElmSyntax from "./shared/elm-to-ast/elm-syntax"
 import SharedLogic from "./shared/logic"
-import { JumpToDocDetails } from "./autodetect-elm-json"
+import { JumpToDocDetails } from "./shared/autodetect-elm-json"
 import { Feature } from "./shared/logic"
 import { ElmJsonFile } from "./shared/elm-json-file"
 

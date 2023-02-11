@@ -1,5 +1,5 @@
 import * as vscode from 'vscode'
-import { GlobalState } from './autodetect-elm-json'
+import { GlobalState } from './shared/autodetect-elm-json'
 import * as ElmToAst from './shared/elm-to-ast'
 import * as ElmSyntax from './shared/elm-to-ast/elm-syntax'
 import Grep from './find-usages/elm-grep'
