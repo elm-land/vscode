@@ -1,7 +1,7 @@
 import * as path from "path"
 import * as vscode from "vscode"
-import * as ElmToAst from "./elm-to-ast"
-import * as ElmSyntax from "./elm-to-ast/elm-syntax"
+import * as ElmToAst from "./shared/elm-to-ast"
+import * as ElmSyntax from "./shared/elm-to-ast/elm-syntax"
 import SharedLogic from "./shared/logic"
 import { JumpToDocDetails } from "./autodetect-elm-json"
 import { Feature } from "./shared/logic"
@@ -235,11 +235,11 @@ export const feature: Feature = ({ globalState, context }) => {
                 let moduleNames =
                   expression.value.functionOrValue.moduleName.length > 0
                     ? moduleImportTracker.findImportedModuleNamesForQualifiedValue(
-                        moduleName
-                      )
+                      moduleName
+                    )
                     : moduleImportTracker.findImportedModuleNamesThatMightHaveExposedThisValue(
                       functionOrValueName
-                      )
+                    )
 
                 for (let moduleName of moduleNames) {
                   let docsJsonFsPath = packages[moduleName]
@@ -316,11 +316,11 @@ export const feature: Feature = ({ globalState, context }) => {
                   annotation.value.typed.moduleNameAndName.value.moduleName
                     .length > 0
                     ? moduleImportTracker.findImportedModuleNamesForQualifiedValue(
-                        moduleName
-                      )
+                      moduleName
+                    )
                     : moduleImportTracker.findImportedModuleNamesThatMightHaveExposedThisValue(
-                        typedAnnotationName
-                      )
+                      typedAnnotationName
+                    )
 
                 for (let moduleName of moduleNames) {
                   let docsJsonFsPath = packages[moduleName]
@@ -452,6 +452,12 @@ export const feature: Feature = ({ globalState, context }) => {
         let toJsonString = (json: unknown): string =>
           JSON.stringify(json).split("</").join("<\\/")
 
+        let typeOrValueName =
+          input.typeOrValueName
+            ? `"${input.typeOrValueName}"`
+            : `null`
+
+
         function getWebviewContent() {
           return `<!DOCTYPE html>
                 <html lang="en">
@@ -471,11 +477,7 @@ export const feature: Feature = ({ globalState, context }) => {
                         package: "${package_}",
                         version: "${version}",
                         moduleName: "${input.moduleName}",
-                        typeOrValueName: ${
-                          input.typeOrValueName
-                            ? `"${input.typeOrValueName}"`
-                            : `null`
-                        },
+                        typeOrValueName: ${typeOrValueName},
                         elmLogoUrl: "${elmLogo}",
                         docs: ${toJsonString(JSON.parse(rawDocsJson))},
                         readme: ${toJsonString(readme)}
@@ -488,7 +490,7 @@ export const feature: Feature = ({ globalState, context }) => {
 
         // And set its HTML content
         panel.webview.html = getWebviewContent()
-      } catch (_) {}
+      } catch (_) { }
     })
   )
 }

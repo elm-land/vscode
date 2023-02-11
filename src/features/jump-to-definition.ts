@@ -1,7 +1,7 @@
 import * as vscode from 'vscode'
 import sharedLogic, { Feature } from './shared/logic'
-import * as ElmToAst from './elm-to-ast'
-import * as ElmSyntax from './elm-to-ast/elm-syntax'
+import * as ElmToAst from './shared/elm-to-ast'
+import * as ElmSyntax from './shared/elm-to-ast/elm-syntax'
 import { GlobalState } from './autodetect-elm-json'
 import { ElmJsonFile } from './shared/elm-json-file'
 
