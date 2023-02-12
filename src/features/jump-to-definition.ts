@@ -41,6 +41,7 @@ const provider = (globalState: GlobalState) => {
         }
       }
     }
+    return null
   }
 
   type HandleJumpToLinksForImportsInput = {
@@ -53,7 +54,7 @@ const provider = (globalState: GlobalState) => {
 
   const handleJumpToLinksForImports =
     async ({ document, position, ast, elmJsonFile, packages }: HandleJumpToLinksForImportsInput)
-      : Promise<vscode.Location | undefined> => {
+      : Promise<vscode.Location | null> => {
 
       for (let import_ of ast.imports) {
 
@@ -119,6 +120,7 @@ const provider = (globalState: GlobalState) => {
           }
         }
       }
+      return null
     }
 
   type HandleJumpToLinksForDeclarationsInput = {
@@ -129,7 +131,7 @@ const provider = (globalState: GlobalState) => {
     packages: Packages
   }
 
-  const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFile, packages }: HandleJumpToLinksForDeclarationsInput) => {
+  const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFile, packages }: HandleJumpToLinksForDeclarationsInput): Promise<vscode.Location | null> => {
     // Need to build up a collection of which types and values
     // are being exposed by all imports.
     // (This will be useful later when jumping to definitions)
@@ -227,8 +229,8 @@ const provider = (globalState: GlobalState) => {
           if (item.value.typeexpose.name === itemName) {
             return true
           }
-        } else {
-          console.error('provideDefinition:error:unhandledExposedMember', item.value)
+        } else if (item.value.type === 'infix') {
+          return false
         }
       }
       return false
@@ -257,8 +259,8 @@ const provider = (globalState: GlobalState) => {
               }
             }
           }
-        } else {
-          console.error('provideDefinition:error:unhandledExposedMember', item.value)
+        } else if (item.value.type === 'infix') {
+          return false
         }
       }
       return false
@@ -297,8 +299,6 @@ const provider = (globalState: GlobalState) => {
               itemName,
               ast
             )
-          } else {
-            console.error('provideDefinition:error:unhandledExposingList', exposingList.value)
           }
 
           return false
@@ -378,9 +378,9 @@ const provider = (globalState: GlobalState) => {
 
     const findLocationOfCustomTypeForPattern =
       async (pattern: ElmSyntax.Pattern, range: vscode.Range)
-        : Promise<vscode.Location | undefined> => {
+        : Promise<vscode.Location | null> => {
         if (['var', 'all', 'unit', 'char', 'string', 'int', 'hex', 'float', 'record'].includes(pattern.type)) {
-          return
+          return null
         } else if (pattern.type === 'parentisized') {
           return findLocationOfCustomTypeForPattern(pattern.parentisized.value.value, range)
         } else if (pattern.type === 'named') {
@@ -425,9 +425,16 @@ const provider = (globalState: GlobalState) => {
             let matchingLocation = await findLocationOfCustomTypeForPattern(item.value, range)
             if (matchingLocation) return matchingLocation
           }
-        } else {
-          console.error('provideDefinition:error:unhandledPattern', pattern)
+        } else if (pattern.type === 'tuple') {
+          for (let item of pattern.tuple.value) {
+            let range = sharedLogic.fromElmRange(item.range)
+            if (range.contains(position)) {
+              let matchingLocation = await findLocationOfCustomTypeForPattern(item.value, range)
+              if (matchingLocation) return matchingLocation
+            }
+          }
         }
+        return null
       }
 
     type FindLocationForExpressionInput = {
@@ -437,14 +444,14 @@ const provider = (globalState: GlobalState) => {
       localPatterns: ElmSyntax.Node<ElmSyntax.Pattern>[]
     }
 
-    const findLocationForExpressionWithName = async ({ name, args, localDeclarations, localPatterns }: FindLocationForExpressionInput): Promise<vscode.Location | undefined> => {
+    const findLocationForExpressionWithName = async ({ name, args, localDeclarations, localPatterns }: FindLocationForExpressionInput): Promise<vscode.Location | null> => {
       // Check for if in current function's argument list
       for (let argument of args) {
-        let matchingArgument = findArgumentWithMatchingName({ argument, name })
-        if (matchingArgument) {
+        let range = findArgumentWithMatchingName({ argument, name })
+        if (range) {
           return new vscode.Location(
             doc.uri,
-            sharedLogic.fromElmRange(matchingArgument.range)
+            sharedLogic.fromElmRange(range)
           )
         }
       }
@@ -484,6 +491,8 @@ const provider = (globalState: GlobalState) => {
       // Check for any function declarations
       matchingLocation = await findLocationOfDeclarationForModuleName({ doc, ast, moduleName: name })
       if (matchingLocation) return matchingLocation
+
+      return null
     }
 
     const fromPatternToLocalVariableNodes = (pattern: ElmSyntax.Node<ElmSyntax.Pattern>): ElmSyntax.Node<string>[] => {
@@ -523,173 +532,251 @@ const provider = (globalState: GlobalState) => {
       args: ElmSyntax.Node<ElmSyntax.Pattern>[],
       localDeclarations: ElmSyntax.Node<ElmSyntax.Declaration>[],
       localPatterns: ElmSyntax.Node<ElmSyntax.Pattern>[]
-    ): Promise<vscode.Location | undefined> => {
-      if ([
-        'unit',
-        'hex',
-        'negation',
-        'integer',
-        'float',
-        'literal',
-        'charLiteral',
-        'glsl',
-        'recordAccessFunction'
-      ].includes(expression.value.type)) {
-        return
-      } else if (expression.value.type === 'application') {
-        for (let item of expression.value.application) {
+    ): Promise<vscode.Location | null> => {
+      switch (expression.value.type) {
+        case 'application':
+          for (let item of expression.value.application) {
+            let range = sharedLogic.fromElmRange(item.range)
+            if (range.contains(position)) {
+              return findLocationOfItemsForExpression(item, args, localDeclarations, localPatterns)
+            }
+          }
+          return null
+        case 'case':
+          // Handle the expression between the "case" and "of"
+          let caseOfRange = sharedLogic.fromElmRange(expression.value.case.expression.range)
+          if (caseOfRange.contains(position)) {
+            return findLocationOfItemsForExpression(expression.value.case.expression, args, localDeclarations, localPatterns)
+          }
+
+          // Handle each branch of the case expression
+          let cases = expression.value.case.cases
+
+          for (let item of cases) {
+            // The part before the "->"
+            let patternRange = sharedLogic.fromElmRange(item.pattern.range)
+            if (patternRange.contains(position)) {
+              return findLocationOfCustomTypeForPattern(item.pattern.value, patternRange)
+            }
+
+            // The expression after the "->"
+            let expressionRange = sharedLogic.fromElmRange(item.expression.range)
+            if (expressionRange.contains(position)) {
+              return findLocationOfItemsForExpression(item.expression, args, localDeclarations, localPatterns.concat([item.pattern]))
+            }
+          }
+          return null
+        case 'charLiteral':
+          return null
+        case 'float':
+          return null
+        case 'functionOrValue':
+          let name = [...expression.value.functionOrValue.moduleName, expression.value.functionOrValue.name].join('.')
+          return findLocationForExpressionWithName({ name, args, localDeclarations, localPatterns })
+        case 'glsl':
+          return null
+        case 'hex':
+          return null
+        case 'ifBlock':
+          let expressions = [
+            expression.value.ifBlock.clause,
+            expression.value.ifBlock.then,
+            expression.value.ifBlock.else
+          ]
+
+          for (let item of expressions) {
+            let range = sharedLogic.fromElmRange(item.range)
+            if (range.contains(position)) {
+              return findLocationOfItemsForExpression(item, args, localDeclarations, localPatterns)
+            }
+          }
+          return null
+        case 'integer':
+          return null
+        case 'lambda':
+          let patterns = expression.value.lambda.patterns
+
+          for (let pattern of patterns) {
+            let range = sharedLogic.fromElmRange(pattern.range)
+            if (range.contains(position)) {
+              return findLocationOfCustomTypeForPattern(pattern.value, range)
+            }
+          }
+
+          let item = expression.value.lambda.expression
           let range = sharedLogic.fromElmRange(item.range)
           if (range.contains(position)) {
             return findLocationOfItemsForExpression(item, args, localDeclarations, localPatterns)
           }
-        }
-      } else if (expression.value.type === 'functionOrValue') {
-        let name = [...expression.value.functionOrValue.moduleName, expression.value.functionOrValue.name].join('.')
-        return findLocationForExpressionWithName({ name, args, localDeclarations, localPatterns })
-      } else if (expression.value.type === 'parenthesized') {
-        return findLocationOfItemsForExpression(expression.value.parenthesized, args, localDeclarations, localPatterns)
-      } else if (expression.value.type === 'list') {
-        let items = expression.value.list
-        for (let item of items) {
-          let range = sharedLogic.fromElmRange(item.range)
-          if (range.contains(position)) {
-            return findLocationOfItemsForExpression(item, args, localDeclarations, localPatterns)
-          }
-        }
-      } else if (expression.value.type === 'tupled') {
-        let items = expression.value.tupled
-        for (let item of items) {
-          let range = sharedLogic.fromElmRange(item.range)
-          if (range.contains(position)) {
-            return findLocationOfItemsForExpression(item, args, localDeclarations, localPatterns)
-          }
-        }
-      } else if (expression.value.type === 'record') {
-        let items = expression.value.record.map(field => field.value.expression)
+          return null
+        case 'let':
+          let letDeclarations = expression.value.let.declarations
+          let newLocalDeclarations = localDeclarations.concat(letDeclarations)
 
-        for (let item of items) {
-          let range = sharedLogic.fromElmRange(item.range)
-          if (range.contains(position)) {
-            return findLocationOfItemsForExpression(item, args, localDeclarations, localPatterns)
-          }
-        }
-      } else if (expression.value.type === 'case') {
-        // Handle the expression between the "case" and "of"
-        let caseOfRange = sharedLogic.fromElmRange(expression.value.case.expression.range)
-        if (caseOfRange.contains(position)) {
-          return findLocationOfItemsForExpression(expression.value.case.expression, args, localDeclarations, localPatterns)
-        }
-
-        // Handle each branch of the case expression
-        let items = expression.value.case.cases
-
-        for (let item of items) {
-          // The part before the "->"
-          let patternRange = sharedLogic.fromElmRange(item.pattern.range)
-          if (patternRange.contains(position)) {
-            return findLocationOfCustomTypeForPattern(item.pattern.value, patternRange)
+          // Handle declarations between "let" and "in" keywords
+          for (let declaration of letDeclarations) {
+            let range = sharedLogic.fromElmRange(declaration.range)
+            if (range.contains(position) && ElmSyntax.isFunctionDeclaration(declaration)) {
+              return findLocationForFunctionDeclaration(
+                declaration.value.function,
+                args,
+                newLocalDeclarations,
+                localPatterns
+              )
+            }
           }
 
-          // The expression after the "->"
-          let expressionRange = sharedLogic.fromElmRange(item.expression.range)
-          if (expressionRange.contains(position)) {
-            return findLocationOfItemsForExpression(item.expression, args, localDeclarations, localPatterns.concat([item.pattern]))
+          // Handle expression after the "in" keyword
+          let range2 = sharedLogic.fromElmRange(expression.value.let.expression.range)
+          if (range2.contains(position)) {
+            return findLocationOfItemsForExpression(expression.value.let.expression, args, newLocalDeclarations, localPatterns)
           }
-        }
-      } else if (expression.value.type === 'recordAccess') {
-        let range = sharedLogic.fromElmRange(expression.value.recordAccess.expression.range)
-        if (range.contains(position)) {
-          return findLocationOfItemsForExpression(expression.value.recordAccess.expression, args, localDeclarations, localPatterns)
-        }
-      } else if (expression.value.type === 'recordUpdate') {
-        // Try to link the the part before the "|"
-        let range = sharedLogic.fromElmRange(expression.value.recordUpdate.name.range)
-        if (range.contains(position)) {
-          return findLocationForExpressionWithName({
-            name: expression.value.recordUpdate.name.value,
-            args,
-            localDeclarations,
-            localPatterns
-          })
-        }
-
-        // Try to link to items within expression
-        let items: ElmSyntax.Node<ElmSyntax.Expression>[] =
-          expression.value.recordUpdate.updates
-            .map(update => update.value.expression)
-
-        for (let item of items) {
-          let range = sharedLogic.fromElmRange(item.range)
-          if (range.contains(position)) {
-            return findLocationOfItemsForExpression(item, args, localDeclarations, localPatterns)
+          return null
+        case 'list':
+          let listExpressions = expression.value.list
+          for (let item of listExpressions) {
+            let range = sharedLogic.fromElmRange(item.range)
+            if (range.contains(position)) {
+              return findLocationOfItemsForExpression(item, args, localDeclarations, localPatterns)
+            }
           }
-        }
-      } else if (expression.value.type === 'ifBlock') {
-        let items = [
-          expression.value.ifBlock.clause,
-          expression.value.ifBlock.then,
-          expression.value.ifBlock.else
-        ]
-
-        for (let item of items) {
-          let range = sharedLogic.fromElmRange(item.range)
-          if (range.contains(position)) {
-            return findLocationOfItemsForExpression(item, args, localDeclarations, localPatterns)
+          return null
+        case 'literal':
+          return null
+        case 'negation':
+          return findLocationOfItemsForExpression(expression.value.negation, args, localDeclarations, localPatterns)
+        case 'operator':
+          return null
+        case 'operatorapplication':
+          let operatorExpressions = [
+            expression.value.operatorapplication.left,
+            expression.value.operatorapplication.right
+          ]
+          for (let item of operatorExpressions) {
+            let range = sharedLogic.fromElmRange(item.range)
+            if (range.contains(position)) {
+              return findLocationOfItemsForExpression(item, args, localDeclarations, localPatterns)
+            }
           }
-        }
-      } else if (expression.value.type === 'let') {
-        let letDeclarations = expression.value.let.declarations
-        let newLocalDeclarations = localDeclarations.concat(letDeclarations)
+          return null
+        case 'parenthesized':
+          return findLocationOfItemsForExpression(expression.value.parenthesized, args, localDeclarations, localPatterns)
+        case 'prefixoperator':
+          return null
+        case 'record':
+          let recordExpressions = expression.value.record.map(field => field.value.expression)
 
-        // Handle declarations between "let" and "in" keywords
-        for (let declaration of letDeclarations) {
-          let range = sharedLogic.fromElmRange(declaration.range)
-          if (range.contains(position) && ElmSyntax.isFunctionDeclaration(declaration)) {
-            return findLocationForFunctionDeclaration(
-              declaration,
+          for (let item of recordExpressions) {
+            let range = sharedLogic.fromElmRange(item.range)
+            if (range.contains(position)) {
+              return findLocationOfItemsForExpression(item, args, localDeclarations, localPatterns)
+            }
+          }
+          return null
+        case 'recordAccess':
+          let range3 = sharedLogic.fromElmRange(expression.value.recordAccess.expression.range)
+          if (range3.contains(position)) {
+            return findLocationOfItemsForExpression(expression.value.recordAccess.expression, args, localDeclarations, localPatterns)
+          }
+          return null
+        case 'recordAccessFunction':
+          return null
+        case 'recordUpdate':
+          // Try to link the the part before the "|"
+          let range4 = sharedLogic.fromElmRange(expression.value.recordUpdate.name.range)
+          if (range4.contains(position)) {
+            return findLocationForExpressionWithName({
+              name: expression.value.recordUpdate.name.value,
               args,
-              newLocalDeclarations,
+              localDeclarations,
               localPatterns
-            )
+            })
           }
-        }
 
-        // Handle expression after the "in" keyword
-        let range = sharedLogic.fromElmRange(expression.value.let.expression.range)
-        if (range.contains(position)) {
-          return findLocationOfItemsForExpression(expression.value.let.expression, args, newLocalDeclarations, localPatterns)
-        }
-      } else if (expression.value.type === 'lambda') {
-        let patterns = expression.value.lambda.patterns
+          // Try to link to items within expression
+          let items: ElmSyntax.Node<ElmSyntax.Expression>[] =
+            expression.value.recordUpdate.updates
+              .map(update => update.value.expression)
 
-        for (let pattern of patterns) {
-          let range = sharedLogic.fromElmRange(pattern.range)
-          if (range.contains(position)) {
-            return findLocationOfCustomTypeForPattern(pattern.value, range)
+          for (let item of items) {
+            let range = sharedLogic.fromElmRange(item.range)
+            if (range.contains(position)) {
+              return findLocationOfItemsForExpression(item, args, localDeclarations, localPatterns)
+            }
           }
-        }
-
-        let item = expression.value.lambda.expression
-        let range = sharedLogic.fromElmRange(item.range)
-        if (range.contains(position)) {
-          return findLocationOfItemsForExpression(item, args, localDeclarations, localPatterns)
-        }
-      }
-
-      else {
-        console.error('provideDefinition:error:unhandledExpression', expression)
+          return null
+        case 'tupled':
+          let tupledItems = expression.value.tupled
+          for (let item of tupledItems) {
+            let range = sharedLogic.fromElmRange(item.range)
+            if (range.contains(position)) {
+              return findLocationOfItemsForExpression(item, args, localDeclarations, localPatterns)
+            }
+          }
+          return null
+        case 'unit':
+          return null
       }
     }
 
-    const findArgumentWithMatchingName = ({ argument, name }: { argument: ElmSyntax.Node<ElmSyntax.Pattern>, name: string }) => {
-      if (['all', 'unit', 'char', 'string', 'int', 'hex', 'float'].includes(argument.value.type)) {
-        return
-      } else if (argument.value.type === 'var') {
-        if (argument.value.var.value === name) {
-          return argument
-        }
-      } else {
-        console.error('provideDefinition:error:unhandledArgumentPattern', argument.value)
+    const findArgumentWithMatchingName = ({ argument, name }: { argument: ElmSyntax.Node<ElmSyntax.Pattern>, name: string }): ElmSyntax.Range | null => {
+      let match: ElmSyntax.Node<ElmSyntax.Pattern> | undefined
+      switch (argument.value.type) {
+        case 'all':
+          return null
+        case 'as':
+          return null
+        case 'char':
+          return null
+        case 'float':
+          return null
+        case 'hex':
+          return null
+        case 'int':
+          return null
+        case 'list':
+          match = argument.value.list.value.find(arg => findArgumentWithMatchingName({ argument: arg, name }))
+          if (match) {
+            return match.range
+          } else {
+            return null
+          }
+        case 'named':
+          match = argument.value.named.patterns.find(arg => findArgumentWithMatchingName({ argument: arg, name }))
+          if (match) {
+            return match.range
+          } else {
+            return null
+          }
+        case 'parentisized':
+          return findArgumentWithMatchingName({
+            argument: argument.value.parentisized.value,
+            name
+          })
+        case 'record':
+          let matchingNode = argument.value.record.value.find(x => x.value === name)
+          if (matchingNode) {
+            matchingNode.range
+          }
+        case 'string':
+          return null
+        case 'tuple':
+          match = argument.value.tuple.value.find(arg => findArgumentWithMatchingName({ argument: arg, name }))
+          if (match) {
+            return match.range
+          } else {
+            return null
+          }
+        case 'var':
+          if (argument.value.var.value === name) {
+            return argument.range
+          } else {
+            return null
+          }
+        case 'uncons':
+          return null
+        case 'unit':
+          return null
       }
     }
 
@@ -764,22 +851,15 @@ const provider = (globalState: GlobalState) => {
         return undefined
       } else if (typeAnnotation.type === 'unit') {
         return undefined
-      } else {
-        console.error('provideDefinition:error:unhandledTypeAnnotation', typeAnnotation)
       }
     }
 
     const findLocationForFunctionDeclaration = async (
-      declaration: ElmSyntax.Node<{
-        type: "function"
-        function: ElmSyntax.Function_
-      }>,
+      func: ElmSyntax.Function_,
       existingArgs: ElmSyntax.Node<ElmSyntax.Pattern>[],
       localDeclarations: ElmSyntax.Node<ElmSyntax.Declaration>[],
       localPatterns: ElmSyntax.Node<ElmSyntax.Pattern>[]
-    ) => {
-      let func = declaration.value.function
-
+    ): Promise<vscode.Location | null> => {
       // Handle function type annotations
       if (func.signature) {
         let typeAnnotation = func.signature.value.typeAnnotation.value
@@ -807,6 +887,8 @@ const provider = (globalState: GlobalState) => {
         )
         if (matchingLocation) return matchingLocation
       }
+
+      return null
     }
 
     for (let import_ of ast.imports) {
@@ -824,8 +906,6 @@ const provider = (globalState: GlobalState) => {
 
       // Keep track of module import `exposing` statements
       if (import_.value.exposingList) {
-
-        let type = import_.value.exposingList.value.type
         if (import_.value.exposingList.value.type === 'explicit') {
           let topLevelExposeNodes = import_.value.exposingList.value.explicit
           let isExposingAnyCustomVariants =
@@ -844,10 +924,8 @@ const provider = (globalState: GlobalState) => {
           if (isExposingAnyCustomVariants) {
             hasUnknownImportsFromExposingAll.push(moduleName)
           }
-        } else if (type === 'all') {
+        } else if (import_.value.exposingList.value.type === 'all') {
           hasUnknownImportsFromExposingAll.push(moduleName)
-        } else {
-          console.error('provideDefinition:error:unhandledExposingListType', import_.value.exposingList.value)
         }
       }
     }
@@ -855,8 +933,8 @@ const provider = (globalState: GlobalState) => {
     for (let declaration of ast.declarations) {
       let range = sharedLogic.fromElmRange(declaration.range)
       if (range.contains(position)) {
-        if (ElmSyntax.isFunctionDeclaration(declaration)) {
-          return findLocationForFunctionDeclaration(declaration, [], [], [])
+        if (declaration.value.type === 'function') {
+          return findLocationForFunctionDeclaration(declaration.value.function, [], [], [])
         } else if (declaration.value.type === 'typeAlias') {
           let typeAnnotation = declaration.value.typeAlias.typeAnnotation.value
 
@@ -871,11 +949,32 @@ const provider = (globalState: GlobalState) => {
             let matchingLocation = await findLocationForTypeAnnotation(customTypeVariantArg.value)
             if (matchingLocation) return matchingLocation
           }
-        } else {
-          console.error(`provideDefinition:error:unhandledDeclarationType`, declaration.value)
+        } else if (declaration.value.type === 'port') {
+          let typeAnnotation = declaration.value.port.typeAnnotation.value
+
+          let matchingLocation = await findLocationForTypeAnnotation(typeAnnotation)
+          if (matchingLocation) return matchingLocation
+        } else if (declaration.value.type === 'destructuring') {
+          let func: ElmSyntax.Function_ = {
+            documentation: null,
+            signature: null,
+            declaration: {
+              value: {
+                name: { value: '???', range: declaration.range },
+                arguments: [],
+                expression: declaration.value.destructuring.expression
+              },
+              range: declaration.range
+            }
+          }
+          return findLocationForFunctionDeclaration(func, [], [], [])
+        } else if (declaration.value.type === 'infix') {
+          return null
         }
       }
     }
+
+    return null
   }
 
 

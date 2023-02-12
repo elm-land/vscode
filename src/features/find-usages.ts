@@ -64,53 +64,69 @@ const provider = (globalState: GlobalState) => {
   }
 }
 
-const getDeclarationNameAndKindAtPosition = (ast: ElmSyntax.Ast, position: vscode.Position): { declarationName: string, kind: 'value' | 'type' } | undefined => {
-  for (let declaration of ast.declarations) {
-    if (declaration.value.type === 'function') {
-      let signatureNameValue = declaration.value.function.signature?.value.name
-      let signatureNameRange =
-        signatureNameValue
-          ? sharedLogic.fromElmRange(signatureNameValue.range)
-          : undefined
+const getDeclarationNameAndKindAtPosition = (ast: ElmSyntax.Ast, position: vscode.Position): { declarationName: string, kind: 'value' | 'type' } | null => {
+  let getDeclarationNameAndKind = (declaration: ElmSyntax.Node<ElmSyntax.Declaration>): { declarationName: string, kind: 'value' | 'type' } | null => {
+    switch (declaration.value.type) {
+      case 'destructuring':
+        return null
+      case 'function':
+        let signatureNameValue = declaration.value.function.signature?.value.name
+        let signatureNameRange =
+          signatureNameValue
+            ? sharedLogic.fromElmRange(signatureNameValue.range)
+            : undefined
 
-      let declarationNameValue = declaration.value.function.declaration.value.name
-      let declarationNameRange = sharedLogic.fromElmRange(declarationNameValue.range)
+        let declarationNameValue = declaration.value.function.declaration.value.name
+        let declarationNameRange = sharedLogic.fromElmRange(declarationNameValue.range)
 
-      let cursorInSignatureName = signatureNameRange && signatureNameRange.contains(position)
-      if (declarationNameRange.contains(position) || cursorInSignatureName) {
-        return {
-          declarationName: declarationNameValue.value,
-          kind: 'value'
+        let cursorInSignatureName = signatureNameRange && signatureNameRange.contains(position)
+        if (declarationNameRange.contains(position) || cursorInSignatureName) {
+          return {
+            declarationName: declarationNameValue.value,
+            kind: 'value'
+          }
         }
-      }
-    } else if (declaration.value.type === 'typeAlias') {
-      let range = sharedLogic.fromElmRange(declaration.value.typeAlias.name.range)
-      if (range.contains(position)) {
-        return {
-          declarationName: declaration.value.typeAlias.name.value,
-          kind: 'type'
+        return null
+      case 'infix':
+        return null
+      case 'port':
+        let range = sharedLogic.fromElmRange(declaration.value.port.name.range)
+        if (range.contains(position)) {
+          return {
+            declarationName: declaration.value.port.name.value,
+            kind: 'value'
+          }
         }
-      }
-    } else if (declaration.value.type === 'typedecl') {
-      let range = sharedLogic.fromElmRange(declaration.value.typedecl.name.range)
-      if (range.contains(position)) {
-        return {
-          declarationName: declaration.value.typedecl.name.value,
-          kind: 'type'
+        return null
+      case 'typeAlias':
+        let range2 = sharedLogic.fromElmRange(declaration.value.typeAlias.name.range)
+        if (range2.contains(position)) {
+          return {
+            declarationName: declaration.value.typeAlias.name.value,
+            kind: 'type'
+          }
         }
-      }
-    } else if (declaration.value.type === 'port') {
-      let range = sharedLogic.fromElmRange(declaration.value.port.name.range)
-      if (range.contains(position)) {
-        return {
-          declarationName: declaration.value.port.name.value,
-          kind: 'value'
+        return null
+      case 'typedecl':
+        let range3 = sharedLogic.fromElmRange(declaration.value.typedecl.name.range)
+        if (range3.contains(position)) {
+          return {
+            declarationName: declaration.value.typedecl.name.value,
+            kind: 'type'
+          }
         }
-      }
-    } else {
-      console.error(`findUsages:unhandledDeclarationType`, declaration.value)
+        return null
     }
   }
+
+  for (let declaration of ast.declarations) {
+    let returnValue = getDeclarationNameAndKind(declaration)
+    if (returnValue) {
+      return returnValue
+    }
+  }
+
+  return null
 }
 
 type ScanForUsagesInput = {

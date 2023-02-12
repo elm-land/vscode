@@ -431,8 +431,6 @@ export const createModuleImportTracker = (ast: Ast): ModuleImportTracker => {
     }
 
     if (import_.value.exposingList) {
-
-      let type = import_.value.exposingList.value.type
       if (import_.value.exposingList.value.type === 'explicit') {
         let topLevelExposeNodes = import_.value.exposingList.value.explicit
         let isExposingAnyCustomVariants =
@@ -451,10 +449,8 @@ export const createModuleImportTracker = (ast: Ast): ModuleImportTracker => {
         if (isExposingAnyCustomVariants) {
           hasUnknownImportsFromExposingAll.push(moduleName)
         }
-      } else if (type === 'all') {
+      } else if (import_.value.exposingList.value.type === 'all') {
         hasUnknownImportsFromExposingAll.push(moduleName)
-      } else {
-        console.error('provideDefinition:error:unhandledExposingListType', import_.value.exposingList.value)
       }
     }
   }
@@ -472,12 +468,12 @@ export const createModuleImportTracker = (ast: Ast): ModuleImportTracker => {
   }
 }
 
-export const fromTypeAnnotationToString = (node : Node<TypeAnnotation>) : string => {
+export const fromTypeAnnotationToString = (node: Node<TypeAnnotation>): string => {
   switch (node.value.type) {
     case 'function':
-      return [ fromTypeAnnotationToString(node.value.function.left),
-        fromTypeAnnotationToString(node.value.function.right)
-      ].join(' -> ') 
+      return [fromTypeAnnotationToString(node.value.function.left),
+      fromTypeAnnotationToString(node.value.function.right)
+      ].join(' -> ')
     case 'generic':
       return node.value.generic.value
     case 'genericRecord':
@@ -496,8 +492,8 @@ export const fromTypeAnnotationToString = (node : Node<TypeAnnotation>) : string
         ? '()'
         : `( ${tupledFields.map(fromTypeAnnotationToString).join(', ')} )`
     case 'typed':
-      let typeArgs = node.value.typed.args.length === 0 
-        ? '' 
+      let typeArgs = node.value.typed.args.length === 0
+        ? ''
         : ' ' + node.value.typed.args.map(fromTypeAnnotationToString).join(' ')
       return `${getNameFromModuleNameAndName(node.value.typed.moduleNameAndName)}${typeArgs}`
     case 'unit':
@@ -505,6 +501,6 @@ export const fromTypeAnnotationToString = (node : Node<TypeAnnotation>) : string
   }
 }
 
-const fromRecordFieldToString = (node: Node<RecordFieldAnnotation>) : string => {
+const fromRecordFieldToString = (node: Node<RecordFieldAnnotation>): string => {
   return `${node.value.name.value} : ${fromTypeAnnotationToString(node.value.typeAnnotation)}`
 }
