@@ -172,8 +172,9 @@ const toModuleDoc = (ast: ElmSyntax.Ast): ModuleDoc => {
         let value: Value = {
           name: declarationNode.value.function.declaration.value.name.value,
           comment: declarationNode.value.function.documentation?.value || '',
-          // TODO: Need a faster elmi-to-json for type inference
-          type: ''
+          type: declarationNode.value.function.signature?.value.typeAnnotation
+            ? ElmSyntax.fromTypeAnnotationToString(declarationNode.value.function.signature?.value.typeAnnotation)
+            : ''
         }
         values.push(value)
       } else if (ElmSyntax.isTypeAliasDeclaration(declarationNode)) {
@@ -181,7 +182,6 @@ const toModuleDoc = (ast: ElmSyntax.Ast): ModuleDoc => {
           name: declarationNode.value.typeAlias.name.value,
           comment: declarationNode.value.typeAlias.documentation?.value || '',
           args: declarationNode.value.typeAlias.generics.map(node => node.value),
-          // TODO: Need a faster elmi-to-json for type inference
           type: ''
         }
         aliases.push(alias)

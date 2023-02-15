@@ -2,7 +2,7 @@
   "name": "elm-land",
   "displayName": "Elm Land",
   "description": "A minimal plugin for Elm",
-  "version": "0.0.9",
+  "version": "0.1.0",
   "icon": "src/elm-land-plugin.png",
   "publisher": "elm-land",
   "repository": "https://github.com/elm-land/vscode",
@@ -77,7 +77,7 @@
             "order": 2,
             "description": "Enable the 'Find Usages' feature",
             "type": "boolean",
-            "default": false
+            "default": true
           },
           "elmLand.feature.errorHighlighting": {
             "order": 3,

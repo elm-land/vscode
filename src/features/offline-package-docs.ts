@@ -83,27 +83,32 @@ export const feature: Feature = ({ globalState, context }) => {
           let moduleImportTracker = ElmSyntax.createModuleImportTracker(ast)
 
           const findPackageLinksInDeclaration = (
-            declaration: ElmSyntax.Declaration
+            declaration: ElmSyntax.Declaration,
+            namesToIgnore: string[]
           ): vscode.DocumentLink[] => {
             let links: vscode.DocumentLink[] = []
             switch (declaration.type) {
               case "destructuring":
                 return findPackageLinksInExpression(
-                  declaration.destructuring.expression
+                  declaration.destructuring.expression,
+                  namesToIgnore
                 )
               case "function":
+                namesToIgnore = namesToIgnore.concat(declaration.function.declaration.value.arguments.flatMap(ElmSyntax.toPatternDefinitionNames))
                 if (
                   declaration.function.signature?.value.typeAnnotation.value
                 ) {
                   links.push(
                     ...findPackageLinksInAnnotation(
-                      declaration.function.signature.value.typeAnnotation
+                      declaration.function.signature.value.typeAnnotation,
+                      namesToIgnore
                     )
                   )
                 }
                 links.push(
                   ...findPackageLinksInExpression(
-                    declaration.function.declaration.value.expression
+                    declaration.function.declaration.value.expression,
+                    namesToIgnore
                   )
                 )
                 return links
@@ -111,16 +116,18 @@ export const feature: Feature = ({ globalState, context }) => {
                 return []
               case "port":
                 return findPackageLinksInAnnotation(
-                  declaration.port.typeAnnotation
+                  declaration.port.typeAnnotation,
+                  namesToIgnore
                 )
               case "typeAlias":
                 return findPackageLinksInAnnotation(
-                  declaration.typeAlias.typeAnnotation
+                  declaration.typeAlias.typeAnnotation,
+                  namesToIgnore
                 )
               case "typedecl":
                 for (let constructor of declaration.typedecl.constructors) {
                   for (let arg of constructor.value.arguments) {
-                    links.push(...findPackageLinksInAnnotation(arg))
+                    links.push(...findPackageLinksInAnnotation(arg, namesToIgnore))
                   }
                 }
                 return links
@@ -128,7 +135,8 @@ export const feature: Feature = ({ globalState, context }) => {
           }
 
           const findPackageLinksInExpression = (
-            expression: ElmSyntax.Node<ElmSyntax.Expression>
+            expression: ElmSyntax.Node<ElmSyntax.Expression>,
+            namesToIgnore: string[]
           ): vscode.DocumentLink[] => {
             let links: vscode.DocumentLink[] = []
 
@@ -152,44 +160,49 @@ export const feature: Feature = ({ globalState, context }) => {
                   expression.value.ifBlock.else,
                   expression.value.ifBlock.clause,
                 ]) {
-                  links.push(...findPackageLinksInExpression(node))
+                  links.push(...findPackageLinksInExpression(node, namesToIgnore))
                 }
                 return links
               case "lambda":
                 for (let pattern of expression.value.lambda.patterns) {
-                  links.push(...findPackageLinksInPattern(pattern))
+                  links.push(...findPackageLinksInPattern(pattern, namesToIgnore))
                 }
+                let newNamesToIgnore = namesToIgnore.concat(expression.value.lambda.patterns.flatMap(ElmSyntax.toPatternDefinitionNames))
                 links.push(
                   ...findPackageLinksInExpression(
-                    expression.value.lambda.expression
+                    expression.value.lambda.expression,
+                    newNamesToIgnore
                   )
                 )
                 return links
               case "let":
+                let newNamesToIgnore2 = namesToIgnore.concat(expression.value.let.declarations.map(ElmSyntax.toDeclarationName).filter(isNotNull))
                 for (let declaration of expression.value.let.declarations) {
                   links.push(
-                    ...findPackageLinksInDeclaration(declaration.value)
+                    ...findPackageLinksInDeclaration(declaration.value, newNamesToIgnore2)
                   )
                 }
                 links.push(
                   ...findPackageLinksInExpression(
-                    expression.value.let.expression
+                    expression.value.let.expression,
+                    newNamesToIgnore2
                   )
                 )
                 return links
               case "list":
                 for (let node of expression.value.list) {
-                  links.push(...findPackageLinksInExpression(node))
+                  links.push(...findPackageLinksInExpression(node, namesToIgnore))
                 }
                 return links
               case "parenthesized":
                 return findPackageLinksInExpression(
-                  expression.value.parenthesized
+                  expression.value.parenthesized,
+                  namesToIgnore
                 )
               case "record":
                 for (let node of expression.value.record) {
                   links.push(
-                    ...findPackageLinksInExpression(node.value.expression)
+                    ...findPackageLinksInExpression(node.value.expression, namesToIgnore)
                   )
                 }
                 return links
@@ -197,34 +210,38 @@ export const feature: Feature = ({ globalState, context }) => {
                 // TODO: What's `recordAccess.name`?
                 links.push(
                   ...findPackageLinksInExpression(
-                    expression.value.recordAccess.expression
+                    expression.value.recordAccess.expression,
+                    namesToIgnore
                   )
                 )
                 return links
               case "recordUpdate":
                 for (let node of expression.value.recordUpdate.updates) {
                   links.push(
-                    ...findPackageLinksInExpression(node.value.expression)
+                    ...findPackageLinksInExpression(node.value.expression, namesToIgnore)
                   )
                 }
                 return links
               case "tupled":
                 for (let node of expression.value.tupled) {
-                  links.push(...findPackageLinksInExpression(node))
+                  links.push(...findPackageLinksInExpression(node, namesToIgnore))
                 }
                 return links
               case "application":
                 for (let node of expression.value.application) {
-                  links.push(...findPackageLinksInExpression(node))
+                  links.push(...findPackageLinksInExpression(node, namesToIgnore))
                 }
                 return links
               case "case":
                 links = findPackageLinksInExpression(
-                  expression.value.case.expression
+                  expression.value.case.expression,
+                  namesToIgnore
                 )
                 for (let node of expression.value.case.cases) {
-                  links.push(...findPackageLinksInPattern(node.pattern))
-                  links.push(...findPackageLinksInExpression(node.expression))
+                  let newNamesToIgnore = namesToIgnore.concat(ElmSyntax.toPatternDefinitionNames(node.pattern))
+
+                  links.push(...findPackageLinksInPattern(node.pattern, namesToIgnore))
+                  links.push(...findPackageLinksInExpression(node.expression, newNamesToIgnore))
                 }
                 return links
               case "functionOrValue":
@@ -249,7 +266,7 @@ export const feature: Feature = ({ globalState, context }) => {
                       moduleName,
                       functionOrValueName
                     )
-                    if (typeOrValueName) {
+                    if (typeOrValueName && !namesToIgnore.includes(typeOrValueName)) {
                       let range = SharedLogic.fromElmRange(expression.range)
                       details.push({
                         range,
@@ -267,19 +284,22 @@ export const feature: Feature = ({ globalState, context }) => {
           }
 
           const findPackageLinksInAnnotation = (
-            annotation: ElmSyntax.Node<ElmSyntax.TypeAnnotation>
+            annotation: ElmSyntax.Node<ElmSyntax.TypeAnnotation>,
+            namesToIgnore: string[]
           ): vscode.DocumentLink[] => {
             let links: vscode.DocumentLink[] = []
             switch (annotation.value.type) {
               case "function":
                 links.push(
                   ...findPackageLinksInAnnotation(
-                    annotation.value.function.left
+                    annotation.value.function.left,
+                    namesToIgnore
                   )
                 )
                 links.push(
                   ...findPackageLinksInAnnotation(
-                    annotation.value.function.right
+                    annotation.value.function.right,
+                    namesToIgnore
                   )
                 )
                 return links
@@ -288,20 +308,20 @@ export const feature: Feature = ({ globalState, context }) => {
               case "genericRecord":
                 for (let field of annotation.value.genericRecord.values.value) {
                   links.push(
-                    ...findPackageLinksInAnnotation(field.value.typeAnnotation)
+                    ...findPackageLinksInAnnotation(field.value.typeAnnotation, namesToIgnore)
                   )
                 }
                 return links
               case "record":
                 for (let field of annotation.value.record.value) {
                   links.push(
-                    ...findPackageLinksInAnnotation(field.value.typeAnnotation)
+                    ...findPackageLinksInAnnotation(field.value.typeAnnotation, namesToIgnore)
                   )
                 }
                 return links
               case "tupled":
                 for (let annotation_ of annotation.value.tupled.values) {
-                  links.push(...findPackageLinksInAnnotation(annotation_))
+                  links.push(...findPackageLinksInAnnotation(annotation_, namesToIgnore))
                 }
                 return links
               case "typed":
@@ -346,7 +366,7 @@ export const feature: Feature = ({ globalState, context }) => {
                 }
 
                 for (let arg of annotation.value.typed.args) {
-                  links.push(...findPackageLinksInAnnotation(arg))
+                  links.push(...findPackageLinksInAnnotation(arg, namesToIgnore))
                 }
 
                 return links
@@ -356,13 +376,16 @@ export const feature: Feature = ({ globalState, context }) => {
           }
 
           const findPackageLinksInPattern = (
-            pattern: ElmSyntax.Node<ElmSyntax.Pattern>
+            pattern: ElmSyntax.Node<ElmSyntax.Pattern>,
+            namesToIgnore: string[]
           ): vscode.DocumentLink[] => {
             return []
           }
 
+          let isNotNull = <T>(x: T | null): x is T => x !== null
+          let declarationNames = ast.declarations.map(ElmSyntax.toDeclarationName).filter(isNotNull)
           for (let declarationNode of ast.declarations) {
-            links.push(...findPackageLinksInDeclaration(declarationNode.value))
+            links.push(...findPackageLinksInDeclaration(declarationNode.value, declarationNames))
           }
         }
 

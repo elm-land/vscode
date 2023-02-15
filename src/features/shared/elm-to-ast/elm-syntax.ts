@@ -504,3 +504,128 @@ export const fromTypeAnnotationToString = (node: Node<TypeAnnotation>): string =
 const fromRecordFieldToString = (node: Node<RecordFieldAnnotation>): string => {
   return `${node.value.name.value} : ${fromTypeAnnotationToString(node.value.typeAnnotation)}`
 }
+
+
+// 
+// Determine if a value is potentially being exposed by the current AST
+// 
+export const isExposedFromThisModule = (ast: Ast, typeOrValueName: string): boolean => {
+  let data = toModuleData(ast)
+  return isPotentiallyExposed(data.exposingList, typeOrValueName)
+}
+
+// 
+// Determines if an imported value might be exposed by that import
+// 
+// For example:
+//     
+// 
+export const isPotentiallyExposed = (node: Node<Exposing>, typeOrValueName: string): boolean => {
+  let isPotentiallyExposedFromTopLevelExpose = (topLevelExposeNode: Node<TopLevelExpose>): boolean => {
+    switch (topLevelExposeNode.value.type) {
+      case 'function':
+        return topLevelExposeNode.value.function.name === typeOrValueName
+      case 'infix':
+        return false
+      case 'typeOrAlias':
+        return topLevelExposeNode.value.typeOrAlias.name === typeOrValueName
+      case 'typeexpose':
+        return true
+    }
+  }
+  switch (node.value.type) {
+    case 'all':
+      return true
+    case 'explicit':
+      return node.value.explicit.some(isPotentiallyExposedFromTopLevelExpose)
+  }
+}
+
+
+// 
+// Check if the declaration defines a local version of one of the `valueNames`
+// 
+export const isDefinedAgainByDeclaration = (valueName: string) => (node: Node<Declaration>): boolean => {
+  let declarationName = toDeclarationName(node)
+  if (declarationName) {
+    return valueName === declarationName
+  } else {
+    return false
+  }
+}
+
+
+
+// 
+// Check if the pattern defines a local version of one of the `valueNames`
+// 
+export const isDefinedAgainByPattern = (valueName: string) => (node: Node<Pattern>): boolean => {
+  switch (node.value.type) {
+    case 'all':
+      return false
+    case 'as':
+      return valueName === node.value.as.name.value
+    case 'char':
+      return false
+    case 'float':
+      return false
+    case 'hex':
+      return false
+    case 'int':
+      return false
+    case 'list':
+      return node.value.list.value.some(isDefinedAgainByPattern(valueName))
+    case 'named':
+      return false
+    case 'parentisized':
+      return isDefinedAgainByPattern(valueName)(node.value.parentisized.value)
+    case 'record':
+      return node.value.record.value.some(nameNode => valueName === nameNode.value)
+    case 'string':
+      return false
+    case 'tuple':
+      return node.value.tuple.value.some(isDefinedAgainByPattern(valueName))
+    case 'uncons':
+      return false
+    case 'unit':
+      return false
+    case 'var':
+      return valueName === node.value.var.value
+  }
+}
+
+
+export const toPatternDefinitionNames = (node: Node<Pattern>): string[] => {
+  switch (node.value.type) {
+    case 'all':
+      return []
+    case 'as':
+      return [node.value.as.name.value]
+    case 'char':
+      return []
+    case 'float':
+      return []
+    case 'hex':
+      return []
+    case 'int':
+      return []
+    case 'list':
+      return node.value.list.value.flatMap(toPatternDefinitionNames)
+    case 'named':
+      return []
+    case 'parentisized':
+      return toPatternDefinitionNames(node.value.parentisized.value)
+    case 'record':
+      return node.value.record.value.map(nameNode => nameNode.value)
+    case 'string':
+      return []
+    case 'tuple':
+      return node.value.tuple.value.flatMap(toPatternDefinitionNames)
+    case 'uncons':
+      return []
+    case 'unit':
+      return []
+    case 'var':
+      return [node.value.var.value]
+  }
+}

@@ -32,17 +32,12 @@ const provider = (globalState: GlobalState) => {
         const ast = await ElmToAst.run(text)
 
         if (ast) {
-          // const moduleName = ElmSyntax.toModuleName(ast)
+          const moduleName = ElmSyntax.toModuleName(ast)
           const result = getDeclarationNameAndKindAtPosition(ast, position)
 
           if (result) {
-            // TODO: Check current file for local references
             const referencesInFile = findLocalInstancesOf(ast, result.declarationName, result.kind)
 
-            // const filepathsImportingModule = await Grep.findElmFilesImportingModule({
-            //   moduleName,
-            //   folders: elmJson.sourceDirectories
-            // })
             let usageLocationsFromCurrentModule = referencesInFile.map(range =>
               new vscode.Location(
                 document.uri,
@@ -50,10 +45,44 @@ const provider = (globalState: GlobalState) => {
               )
             )
 
-            // let nestedLists: vscode.Location[][] = await Promise.all(filepathsImportingModule.map(scanForUsagesOf({ moduleName, declarationName: result.declarationName })))
-            // let usageLocationsInOtherModules = nestedLists.flatMap(locations => locations)
+            if (ElmSyntax.isExposedFromThisModule(ast, result.declarationName)) {
+              const filepathsImportingModule = await Grep.findElmFilesImportingModule({
+                moduleName,
+                folders: elmJson.sourceDirectories
+              })
 
-            locations = usageLocationsFromCurrentModule //.concat(usageLocationsInOtherModules)
+              let fullyQualifiedName = [moduleName, result.declarationName].join('.')
+              let astsForOtherFilepaths = await Promise.all(filepathsImportingModule.map(fromFilepathToAst))
+
+              let usageLocationsInOtherModules = astsForOtherFilepaths.flatMap((item) => {
+                if (item) {
+                  let { uri, ast } = item
+                  let importDetails = findImportDetailsFor({ moduleName, ast, typeOrValueName: result.declarationName })
+                  if (importDetails) {
+                    let { isExposed, alias } = importDetails
+                    let ranges: vscode.Range[] = []
+
+                    if (isExposed) {
+                      ranges = ranges.concat(findLocalInstancesOf(ast, result.declarationName, result.kind))
+                    }
+
+                    if (alias) {
+                      ranges = ranges.concat(findLocalInstancesOf(ast, [alias, result.declarationName].join('.'), result.kind))
+                    } else {
+                      ranges = ranges.concat(findLocalInstancesOf(ast, fullyQualifiedName, result.kind))
+                    }
+                    return ranges.map(range => new vscode.Location(uri, range))
+                  }
+                }
+
+                return []
+              })
+              locations = usageLocationsFromCurrentModule.concat(usageLocationsInOtherModules)
+            } else {
+              locations = usageLocationsFromCurrentModule
+            }
+
+
           }
         }
       }
@@ -62,6 +91,38 @@ const provider = (globalState: GlobalState) => {
       return locations
     }
   }
+}
+
+// 
+// Determine if an import is using any aliases or may be exposing a specific value from another module
+// 
+const findImportDetailsFor = ({ moduleName, ast, typeOrValueName }: { moduleName: string, typeOrValueName: string, ast: ElmSyntax.Ast }): { isExposed: boolean, alias: string | undefined } | null => {
+  for (let import_ of ast.imports) {
+    if (import_.value.moduleName.value.join('.') === moduleName) {
+      let isExposed =
+        (import_.value.exposingList === null)
+          ? false
+          : ElmSyntax.isPotentiallyExposed(import_.value.exposingList, typeOrValueName)
+
+      return {
+        isExposed,
+        alias: import_.value.moduleAlias?.value.join('.')
+      }
+    }
+  }
+  return null
+}
+
+const fromFilepathToAst = async (fsPath: string): Promise<{ uri: vscode.Uri, ast: ElmSyntax.Ast } | null> => {
+  let uri = vscode.Uri.file(fsPath)
+  let document = await vscode.workspace.openTextDocument(uri)
+  if (document) {
+    let ast = await ElmToAst.run(document.getText())
+    if (ast) {
+      return { uri, ast }
+    }
+  }
+  return null
 }
 
 const getDeclarationNameAndKindAtPosition = (ast: ElmSyntax.Ast, position: vscode.Position): { declarationName: string, kind: 'value' | 'type' } | null => {
@@ -129,49 +190,14 @@ const getDeclarationNameAndKindAtPosition = (ast: ElmSyntax.Ast, position: vscod
   return null
 }
 
-type ScanForUsagesInput = {
-  moduleName: string
-  declarationName: string
-}
 
-const scanForUsagesOf = ({ moduleName, declarationName }: ScanForUsagesInput) => async (fsPath: string) => {
-  const uri = vscode.Uri.file(fsPath)
-  const document = await vscode.workspace.openTextDocument(uri)
-  const text = document.getText()
-  const ast = await ElmToAst.run(text)
+const findLocalInstancesOf = (ast: ElmSyntax.Ast, valueName: string, kind: 'type' | 'value'): vscode.Range[] => {
 
-  if (ast) {
-    const otherModuleName = ElmSyntax.toModuleName(ast)
-    console.log({ otherModuleName })
+  let isLocallyDefined = ast.declarations.some(ElmSyntax.isDefinedAgainByDeclaration(valueName))
+  if (isLocallyDefined) {
+    return []
   }
 
-  return [
-    new vscode.Location(
-      uri,
-      sharedLogic.fromElmRange([1, 1, 1, 1])
-    )
-  ]
-}
-
-// TODO: Make sure to handle edge cases for local types and values when using the `exposing` keyword.
-// 
-// For example, if a user is looking for all definitions of `Math.add`, and another module
-// imports `Math` like this:
-// 
-//     1|  import Math exposing (..)
-//     2| 
-//     3|  add : Int -> Int -> Int
-//     4|  add a b =
-//     5|     Math.add a b
-//     6|  
-//     7|  double : Int -> Int
-//     8|  double num =
-//     9|     add num num
-// 
-// We want to make sure __only line 5 gets a match__, even though all members of `Math`
-// are exposed and we found an "add" on line 9.
-// 
-const findLocalInstancesOf = (ast: ElmSyntax.Ast, valueName: string, kind: 'type' | 'value'): vscode.Range[] => {
   switch (kind) {
     case 'value':
       return ast.declarations.flatMap(findRangesOfNamedValueInDeclaration(valueName))
@@ -187,9 +213,14 @@ const findRangesOfNamedValueInDeclaration = (valueName: string) => (node: ElmSyn
         ...findRangesOfNamedValueInExpression(valueName)(node.value.destructuring.expression)
       ]
     case 'function':
+      let hasLocallyScopedVersion = node.value.function.declaration.value.arguments.some(ElmSyntax.isDefinedAgainByPattern(valueName))
+      let matchesFromExpression: vscode.Range[] = []
+      if (!hasLocallyScopedVersion) {
+        matchesFromExpression = findRangesOfNamedValueInExpression(valueName)(node.value.function.declaration.value.expression)
+      }
       return [
         ...node.value.function.declaration.value.arguments.flatMap(findRangesOfNamedValueInPattern(valueName)),
-        ...findRangesOfNamedValueInExpression(valueName)(node.value.function.declaration.value.expression)
+        ...matchesFromExpression
       ]
     case 'infix':
       return []
@@ -201,6 +232,7 @@ const findRangesOfNamedValueInDeclaration = (valueName: string) => (node: ElmSyn
       return []
   }
 }
+
 
 const findRangesOfNamedTypeInDeclaration = (typeName: string) => (node: ElmSyntax.Node<ElmSyntax.Declaration>): vscode.Range[] => {
   switch (node.value.type) {
@@ -236,7 +268,11 @@ const findRangesOfNamedValueInExpression = (valueName: string) => (node: ElmSynt
       let fromPatterns = node.value.case.cases.map(case_ => case_.pattern).flatMap(findRangesOfNamedValueInPattern(valueName))
       let fromExpressions = [
         node.value.case.expression,
-        ...node.value.case.cases.map(case_ => case_.expression)
+        ...node.value.case.cases.flatMap(case_ =>
+          (ElmSyntax.isDefinedAgainByPattern(valueName)(case_.pattern))
+            ? []
+            : [case_.expression]
+        )
       ].flatMap(findRangesOfNamedValueInExpression(valueName))
       return fromExpressions.concat(fromPatterns)
     case 'charLiteral':
@@ -245,7 +281,7 @@ const findRangesOfNamedValueInExpression = (valueName: string) => (node: ElmSynt
       return []
     case 'functionOrValue':
       let fullName = [...node.value.functionOrValue.moduleName, node.value.functionOrValue.name].join('.')
-      if (fullName === valueName) {
+      if (valueName === fullName) {
         return [sharedLogic.fromElmRange(node.range)]
       } else {
         return []
@@ -263,14 +299,24 @@ const findRangesOfNamedValueInExpression = (valueName: string) => (node: ElmSynt
     case 'integer':
       return []
     case 'lambda':
+      let isLocallyDefined = node.value.lambda.patterns.some(ElmSyntax.isDefinedAgainByPattern(valueName))
+      let rangesFromExpressions =
+        isLocallyDefined
+          ? []
+          : findRangesOfNamedValueInExpression(valueName)(node.value.lambda.expression)
       return [
         ...node.value.lambda.patterns.flatMap(findRangesOfNamedValueInPattern(valueName)),
-        ...findRangesOfNamedValueInExpression(valueName)(node.value.lambda.expression),
+        ...rangesFromExpressions,
       ]
     case 'let':
+      let isLocallyDefined2 = node.value.let.declarations.some(ElmSyntax.isDefinedAgainByDeclaration(valueName))
+      let rangesFromExpressions2 =
+        isLocallyDefined2
+          ? []
+          : findRangesOfNamedValueInExpression(valueName)(node.value.let.expression)
       return [
         ...node.value.let.declarations.flatMap(findRangesOfNamedValueInDeclaration(valueName)),
-        ...findRangesOfNamedValueInExpression(valueName)(node.value.let.expression)
+        ...rangesFromExpressions2
       ]
     case 'list':
       return node.value.list.flatMap(findRangesOfNamedValueInExpression(valueName))
@@ -394,7 +440,7 @@ const findRangesOfNamedTypeInAnnotation = (typeName: string) => (node: ElmSyntax
       let ranges: vscode.Range[] = node.value.typed.args.flatMap(findRangesOfNamedTypeInAnnotation(typeName))
       let moduleNameAndName = node.value.typed.moduleNameAndName
       let name = ElmSyntax.getNameFromModuleNameAndName(moduleNameAndName)
-      if (name === typeName) {
+      if (typeName.includes(name)) {
         ranges.push(sharedLogic.fromElmRange(moduleNameAndName.range))
       }
       return ranges
@@ -422,7 +468,7 @@ const findRangesOfNamedValueInPattern = (valueName: string) => (node: ElmSyntax.
     case 'named':
       let ranges: vscode.Range[] = node.value.named.patterns.flatMap(findRangesOfNamedValueInPattern(valueName))
       let fullName = [...node.value.named.qualified.moduleName, node.value.named.qualified.name].join('.')
-      if (fullName === valueName) {
+      if (valueName === fullName) {
         ranges.push(sharedLogic.fromElmRange(node.range))
       }
       return ranges
