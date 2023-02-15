@@ -4,8 +4,8 @@
 
 Visual Studio Code is available for Mac, Windows, and Linux.
 
-- [Install VS Code](https://code.visualstudio.com/)
-- [Find the "Elm Land" plugin](https://code.visualstudio.com/docs/editor/extension-marketplace#_install-an-extension)
+- [Download VS Code](https://code.visualstudio.com/)
+- [Install the "Elm Land" plugin](https://marketplace.visualstudio.com/items?itemName=elm-land.elm-land)
 
 ## Highlighted Features
 
