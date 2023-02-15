@@ -46,14 +46,21 @@ const provider = (globalState: GlobalState) => {
             )
 
             if (ElmSyntax.isExposedFromThisModule(ast, result.declarationName)) {
-              const filepathsImportingModule = await Grep.findElmFilesImportingModule({
+              let grepStart = Date.now()
+              const filepathsImportingModule = await Grep.findElmFilesImportingModuleWithValueName({
                 moduleName,
+                typeOrValueName: result.declarationName,
                 folders: elmJson.sourceDirectories
               })
+              console.info(`grep duration`, `${Date.now() - grepStart}ms`)
 
+              let openiningFilesStart = Date.now()
               let fullyQualifiedName = [moduleName, result.declarationName].join('.')
               let astsForOtherFilepaths = await Promise.all(filepathsImportingModule.map(fromFilepathToAst))
+              console.info(`parsingFiles duration`, `${Date.now() - openiningFilesStart}ms`)
 
+
+              let scanningAstsStart = Date.now()
               let usageLocationsInOtherModules = astsForOtherFilepaths.flatMap((item) => {
                 if (item) {
                   let { uri, ast } = item
@@ -63,20 +70,21 @@ const provider = (globalState: GlobalState) => {
                     let ranges: vscode.Range[] = []
 
                     if (isExposed) {
-                      ranges = ranges.concat(findLocalInstancesOf(ast, result.declarationName, result.kind))
+                      ranges = ranges.concat(findRemoteInstancesOf(ast, result.declarationName, result.kind))
                     }
 
                     if (alias) {
-                      ranges = ranges.concat(findLocalInstancesOf(ast, [alias, result.declarationName].join('.'), result.kind))
+                      ranges = ranges.concat(findRemoteInstancesOf(ast, [alias, result.declarationName].join('.'), result.kind))
                     } else {
-                      ranges = ranges.concat(findLocalInstancesOf(ast, fullyQualifiedName, result.kind))
+                      ranges = ranges.concat(findRemoteInstancesOf(ast, fullyQualifiedName, result.kind))
                     }
                     return ranges.map(range => new vscode.Location(uri, range))
                   }
                 }
-
+                
                 return []
               })
+              console.info(`scanningAsts duration`, `${Date.now() - scanningAstsStart}ms`)
               locations = usageLocationsFromCurrentModule.concat(usageLocationsInOtherModules)
             } else {
               locations = usageLocationsFromCurrentModule
@@ -190,14 +198,20 @@ const getDeclarationNameAndKindAtPosition = (ast: ElmSyntax.Ast, position: vscod
   return null
 }
 
-
-const findLocalInstancesOf = (ast: ElmSyntax.Ast, valueName: string, kind: 'type' | 'value'): vscode.Range[] => {
-
+const findRemoteInstancesOf = (ast: ElmSyntax.Ast, valueName: string, kind: 'type' | 'value'): vscode.Range[] => { 
+  // Check if this declaration is already redefined 
+  // 
+  // This prevents us from confusing usage of a local `text` function
+  // with one that might be from `import Html exposing (..)`
   let isLocallyDefined = ast.declarations.some(ElmSyntax.isDefinedAgainByDeclaration(valueName))
   if (isLocallyDefined) {
     return []
   }
 
+  return findLocalInstancesOf(ast, valueName, kind)
+}
+
+const findLocalInstancesOf = (ast: ElmSyntax.Ast, valueName: string, kind: 'type' | 'value'): vscode.Range[] => {
   switch (kind) {
     case 'value':
       return ast.declarations.flatMap(findRangesOfNamedValueInDeclaration(valueName))

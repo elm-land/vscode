@@ -3,6 +3,7 @@ import { exec } from 'node:child_process'
 type Input = {
   folders: string[]
   moduleName: string
+  typeOrValueName: string
 }
 
 // 
@@ -22,7 +23,10 @@ type Input = {
 // 
 
 const findElmFilesImportingModule =
-  async ({ folders, moduleName }: Input): Promise<string[]> => {
+  async ({ folders, moduleName }: {
+    folders: string[]
+    moduleName: string
+  }): Promise<string[]> => {
     const isWindows = process.platform === "win32"
     // 
     // Example for Linux / MacOS:
@@ -55,17 +59,70 @@ const findElmFilesImportingModule =
           ]
         }
 
+    console.log('')
+    console.log([command, ...args].join(' '))
+    console.log('')
+
     return new Promise((resolve) => {
       exec([command, ...args].join(' '), (err, stdout) => {
         if (err) {
           resolve([])
         } else {
-          resolve(stdout.split('\n').filter(a => a))
+          let filepaths = stdout.split('\n').filter(a => a)
+          resolve(filepaths)
+        }
+      })
+    })
+  }
+
+
+const findElmFilesImportingModuleWithValueName =
+  async ({ folders, moduleName, typeOrValueName }: Input): Promise<string[]> => {
+    // Find all filepaths importing the module
+    let filepathsImportingModule = await findElmFilesImportingModule({ folders, moduleName })
+
+    const isWindows = process.platform === "win32"
+    // 
+    // Example for Linux / MacOS:
+    // 
+    //   grep -rl 'Model' filepath1.elm filepath2.elm
+    // 
+    // Example for Windows:
+    // 
+    //   findstr /srm /c:"Model" filepath1.elm filepath2.elm
+    // 
+    // 
+    const { command, args } =
+      isWindows
+        ? {
+          command: 'findstr',
+          args: [
+            `/srm`,
+            `/c:"${typeOrValueName}"`,
+            ...filepathsImportingModule
+          ]
+        }
+        : {
+          command: 'grep',
+          args: [
+            `-rl`,
+            `'${typeOrValueName}'`,
+            ...filepathsImportingModule
+          ]
+        }
+
+    return new Promise((resolve) => {
+      exec([command, ...args].join(' '), (err, stdout) => {
+        if (err) {
+          resolve([])
+        } else {
+          let filepaths = stdout.split('\n').filter(a => a)
+          resolve(filepaths)
         }
       })
     })
   }
 
 export default {
-  findElmFilesImportingModule
+  findElmFilesImportingModuleWithValueName
 }
