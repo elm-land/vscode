@@ -9,14 +9,14 @@ Visual Studio Code is available for Mac, Windows, and Linux.
 
 ## Highlighted Features
 
-- [x] Syntax highlighting
-- [x] Format on save
-- [x] Error highlighting
+- Syntax highlighting
+- Format on save
+- Error highlighting
 
 ## Additional Features
 
-- [x] Jump-to-definition
-- [x] Find all usages
-- [x] Offline-friendly package docs
-- [x] Module import autocomplete
-- [x] Convert HTML to Elm
+- Jump-to-definition
+- Find all usages
+- Offline-friendly package docs
+- Module import autocomplete
+- Convert HTML to Elm
