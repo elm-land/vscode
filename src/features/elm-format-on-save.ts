@@ -1,12 +1,18 @@
-import * as path from 'path'
-import * as vscode from 'vscode'
+import * as vscode from "vscode"
 import * as child_process from "child_process"
-import { Feature } from './shared/logic'
+import { Feature } from "./shared/logic"
 
 export const feature: Feature = ({ context }) => {
   context.subscriptions.push(
-    vscode.languages.registerDocumentFormattingEditProvider('elm', {
-      provideDocumentFormattingEdits
+    vscode.commands.registerCommand('elmLand.installElmFormat', () => {
+      const terminal = vscode.window.createTerminal(`Install elm-format`)
+      terminal.sendText("npm install -g elm-format")
+      terminal.show()
+    })
+  )
+  context.subscriptions.push(
+    vscode.languages.registerDocumentFormattingEditProvider("elm", {
+      provideDocumentFormattingEdits,
     })
   )
 }
@@ -26,13 +32,20 @@ const provideDocumentFormattingEdits = async (
 }
 
 function runElmFormat(document: vscode.TextDocument): Promise<string> {
-  const elmFormat = path.join(__dirname, '..', '..', 'node_modules', '.bin', 'elm-format')
-  const command = `${elmFormat} --stdin --yes`
+  const command = `elm-format --stdin --yes`
   const original = document.getText()
   return new Promise((resolve, reject) => {
-    const process_ = child_process.exec(command, (err, stdout, stderr) => {
+    const process_ = child_process.exec(command, async (err, stdout, stderr) => {
       if (err) {
-        reject(original)
+        let response = await vscode.window.showErrorMessage(
+          'Format on save requires "elm-format"',
+          { modal: true, detail: 'Please click "Install" or disable "Format on save" in your settings.' },
+          'Install'
+        )
+        if (response === 'Install') {
+          vscode.commands.executeCommand('elmLand.installElmFormat')
+        }
+        reject(err)
       } else {
         resolve(stdout)
       }
@@ -49,5 +62,5 @@ function getFullDocRange(document: vscode.TextDocument): vscode.Range {
       new vscode.Position(0, 0),
       new vscode.Position(Number.MAX_VALUE, Number.MAX_VALUE)
     )
-  );
+  )
 }

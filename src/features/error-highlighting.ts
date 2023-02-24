@@ -9,6 +9,16 @@ import sharedLogic, { Feature } from './shared/logic'
 let diagnostics = vscode.languages.createDiagnosticCollection(sharedLogic.pluginId)
 
 export const feature: Feature = ({ globalState, context }) => {
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('elmLand.installElm', () => {
+      const terminal = vscode.window.createTerminal(`Install elm`)
+      terminal.sendText("npm install -g elm")
+      terminal.show()
+    })
+  )
+  vscode.window.onDidChangeTerminalState((e) => console.log({ e }))
+
   context.subscriptions.push(
     vscode.workspace.onDidOpenTextDocument(document => run(globalState, diagnostics, document, 'open'))
   )
@@ -109,35 +119,47 @@ type ParsedReportError = {
 const Elm = {
   compile: (input: { elmJsonFile: ElmJsonFile, elmFilesToCompile: string[] }): Promise<ParsedError | undefined> => {
     let deduplicated = [...new Set(input.elmFilesToCompile)]
-    const elm = path.join(__dirname, '..', '..', 'node_modules', '.bin', 'elm')
-    const command = `(cd ${input.elmJsonFile.projectFolder} && ${elm} make ${deduplicated.join(' ')} --output=/dev/null --report=json)`
+    const command = `(cd ${input.elmJsonFile.projectFolder} && elm make ${deduplicated.join(' ')} --output=/dev/null --report=json)`
     const promise: Promise<ParsedError | undefined> =
       new Promise((resolve) =>
-        child_process.exec(command, (err, _, stderr) => {
+        child_process.exec(command, async (err, _, stderr) => {
           if (err) {
-            try {
-              const json: ElmError = JSON.parse(stderr)
+            const ELM_BINARY_NOT_FOUND = 127
+            if (err.code === ELM_BINARY_NOT_FOUND) {
+              let response = await vscode.window.showErrorMessage(
+                'Error highlighting requires "elm"',
+                { modal: true, detail: 'Click "Install" or disable "Error highlighting" in your settings.' },
+                'Install'
+              )
 
-              switch (json.type) {
-                case 'compile-errors':
-                  let error1: ParsedCompileError = {
-                    kind: 'compile-errors',
-                    errors: json.errors
-                  }
-                  return resolve(error1)
-                case 'error':
-                  let error2: ParsedReportError = {
-                    kind: 'error',
-                    title: json.title,
-                    path: json.path,
-                    message: json.message
-                  }
-                  return resolve(error2)
-                default:
-                  throw new Error("Unhandled error type: " + ((json as any).type))
+              if (response === 'Install') {
+                vscode.commands.executeCommand('elmLand.installElm')
               }
-            } catch (ex) {
-              resolve({ kind: 'unknown', raw: stderr })
+            } else {
+              try {
+                const json: ElmError = JSON.parse(stderr)
+
+                switch (json.type) {
+                  case 'compile-errors':
+                    let error1: ParsedCompileError = {
+                      kind: 'compile-errors',
+                      errors: json.errors
+                    }
+                    return resolve(error1)
+                  case 'error':
+                    let error2: ParsedReportError = {
+                      kind: 'error',
+                      title: json.title,
+                      path: json.path,
+                      message: json.message
+                    }
+                    return resolve(error2)
+                  default:
+                    throw new Error("Unhandled error type: " + ((json as any).type))
+                }
+              } catch (ex) {
+                resolve({ kind: 'unknown', raw: stderr })
+              }
             }
           } else {
             resolve(undefined)

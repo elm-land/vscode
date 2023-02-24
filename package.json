@@ -44,6 +44,18 @@
         "title": "Convert Html to Elm",
         "command": "elmLand.htmlToElm",
         "enablement": "false"
+      },
+      { 
+        "category": "Elm Land",
+        "title": "Install Elm",
+        "command": "elmLand.installElm",
+        "enablement": "false"
+      },
+      { 
+        "category": "Elm Land",
+        "title": "Install elm-format",
+        "command": "elmLand.installElmFormat",
+        "enablement": "false"
       }
     ],
     "configurationDefaults": {
