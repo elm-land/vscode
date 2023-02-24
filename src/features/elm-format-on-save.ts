@@ -30,9 +30,13 @@ const provideDocumentFormattingEdits = async (
     return []
   }
 }
+const isWindows = process.platform === "win32"
 
 function runElmFormat(document: vscode.TextDocument): Promise<string> {
-  const command = `elm-format --stdin --yes`
+  const command = isWindows
+    ? `npx elm-format --stdin --yes`
+    : `elm-format --stdin --yes`
+
   const original = document.getText()
   return new Promise((resolve, reject) => {
     const process_ = child_process.exec(command, async (err, stdout, stderr) => {

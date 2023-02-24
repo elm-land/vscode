@@ -116,10 +116,16 @@ type ParsedReportError = {
   message: ElmErrorMessage[]
 }
 
+const isWindows = process.platform === "win32"
+
 const Elm = {
   compile: (input: { elmJsonFile: ElmJsonFile, elmFilesToCompile: string[] }): Promise<ParsedError | undefined> => {
+    let elm = isWindows
+      ? `npx elm`
+      : `elm`
+
     let deduplicated = [...new Set(input.elmFilesToCompile)]
-    const command = `(cd ${input.elmJsonFile.projectFolder} && elm make ${deduplicated.join(' ')} --output=/dev/null --report=json)`
+    const command = `(cd ${input.elmJsonFile.projectFolder} && ${elm} make ${deduplicated.join(' ')} --output=/dev/null --report=json)`
     const promise: Promise<ParsedError | undefined> =
       new Promise((resolve) =>
         child_process.exec(command, async (err, _, stderr) => {
