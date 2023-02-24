@@ -2,7 +2,7 @@
   "name": "elm-land",
   "displayName": "Elm Land",
   "description": "A minimal plugin for Elm",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "icon": "src/elm-land-plugin.png",
   "publisher": "elm-land",
   "repository": "https://github.com/elm-land/elm-land",

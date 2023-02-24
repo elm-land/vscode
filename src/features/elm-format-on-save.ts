@@ -1,3 +1,4 @@
+import * as path from 'path'
 import * as vscode from 'vscode'
 import * as child_process from "child_process"
 import { Feature } from './shared/logic'
@@ -25,7 +26,8 @@ const provideDocumentFormattingEdits = async (
 }
 
 function runElmFormat(document: vscode.TextDocument): Promise<string> {
-  const command = `npx elm-format --stdin --yes`
+  const elmFormat = path.join(__dirname, '..', '..', 'node_modules', '.bin', 'elm-format')
+  const command = `${elmFormat} --stdin --yes`
   const original = document.getText()
   return new Promise((resolve, reject) => {
     const process_ = child_process.exec(command, (err, stdout, stderr) => {

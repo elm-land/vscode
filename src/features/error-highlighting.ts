@@ -109,7 +109,8 @@ type ParsedReportError = {
 const Elm = {
   compile: (input: { elmJsonFile: ElmJsonFile, elmFilesToCompile: string[] }): Promise<ParsedError | undefined> => {
     let deduplicated = [...new Set(input.elmFilesToCompile)]
-    const command = `(cd ${input.elmJsonFile.projectFolder} && npx elm make ${deduplicated.join(' ')} --output=/dev/null --report=json)`
+    const elm = path.join(__dirname, '..', '..', 'node_modules', '.bin', 'elm')
+    const command = `(cd ${input.elmJsonFile.projectFolder} && ${elm} make ${deduplicated.join(' ')} --output=/dev/null --report=json)`
     const promise: Promise<ParsedError | undefined> =
       new Promise((resolve) =>
         child_process.exec(command, (err, _, stderr) => {
