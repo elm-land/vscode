@@ -100,13 +100,13 @@ To help you convert HTML snippets to Elm code and help newcomers learn the synta
 
 Elm's [editor plugins repo](https://github.com/elm/editor-plugins) recommends doing performance profiling to help others learn how different editors implement features, and also to help try to think of ways to bring down costs.
 
-This VS code plugin was specifically designed to have __near-zero memory overhead [¹](#1-ram-overhead)__, and to __avoid in-memory indexing__ that cache your codebase before invoking features. For this reason, it's been very effective at [Vendr](https://vendr.com), even though the frontend codebase is __over 400k lines__ of Elm code.
+This VS code plugin was specifically designed to have __near-zero memory overhead [¹](#¹-ram-overhead)__, and to __avoid in-memory indexing__ that cache your codebase before invoking features. For this reason, it's been very effective at [Vendr](https://vendr.com), even though the frontend codebase is __over 400k lines__ of Elm code.
 
 ---
 
 ### `rtfeldman/elm-spa-example` (4K LOC, 34 files)
 
-These benchmarks were taken on a __Windows PC [²](#2-pc-specs)__ testing this plugin against [rtfeldman/elm-spa-example](https://github.com/rtfeldman/elm-spa-example) repository, which has 3.8k lines of Elm code across 34 files.
+These benchmarks were taken on a __Windows PC [²](#²-pc-specs)__ testing this plugin against [rtfeldman/elm-spa-example](https://github.com/rtfeldman/elm-spa-example) repository, which has 3.8k lines of Elm code across 34 files.
 
 Feature | Average Speed | Constant RAM Overhead | Cumulative CPU Costs | Battery Implications
 :------ | :------------ | :-------------------- | :------------------- | :-------------------
@@ -118,7 +118,7 @@ __Module import autocomplete__ | <100ms | _None_ | On key stroke | minimal
 __Convert HTML to Elm__ | <100ms | _None_ | On command | minimal
 
 
-#### __1. RAM overhead__
+#### __¹. RAM overhead__
 
 The only in-memory overhead from this plugin comes from caching the contents of your `elm.json` files within the current workspace, and any `docs.json` files for packages that you are using.
 
@@ -126,10 +126,10 @@ For example, if your project is using `elm/http@2.0.0`, the contents of `$ELM_HO
 
 This means a __tiny project with 10 lines of Elm code__ and a __huge project with 500k+ lines of Elm code__, would have __the same RAM overhead__, assuming they had the same Elm package dependencies!
 
-#### __2. PC Specs__
+#### __². PC Specs__
 
 The Windows PC has the following specifications:
-- __OS:__: Windows 11 Home 64-bit
+- __OS__: Windows 11 Home 64-bit
 - __Processor__: Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz (16 CPUs), ~2.4GHz
 - __Memory:__ 16GB RAM
 
