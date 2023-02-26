@@ -1,3 +1,4 @@
+import * as os from 'os'
 import * as path from 'path'
 import * as vscode from 'vscode'
 import { Dependency, ElmJsonFile } from './elm-json-file'
@@ -114,7 +115,7 @@ const toElmJsonFiles = ({ settings, elmJsonFileUris }: Input): Promise<ElmJsonFi
         let ELM_HOME: string | undefined =
           (process.env.ELM_HOME) ? process.env.ELM_HOME
             : (process.env.HOME) ? path.join(process.env.HOME, '.elm')
-              : undefined
+              : path.join(os.homedir(), 'AppData', 'Roaming', 'elm')
 
         let dependencies: Dependency[] = []
 

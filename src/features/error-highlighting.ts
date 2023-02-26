@@ -17,7 +17,6 @@ export const feature: Feature = ({ globalState, context }) => {
       terminal.show()
     })
   )
-  vscode.window.onDidChangeTerminalState((e) => console.log({ e }))
 
   context.subscriptions.push(
     vscode.workspace.onDidOpenTextDocument(document => run(globalState, diagnostics, document, 'open'))
@@ -52,6 +51,7 @@ const run = async (
   document: vscode.TextDocument,
   event: 'open' | 'save'
 ) => {
+  let start = Date.now()
   // Allow user to disable this feature
   const isEnabled: boolean = vscode.workspace.getConfiguration('elmLand').feature.errorHighlighting
   if (!isEnabled) {
@@ -80,7 +80,6 @@ const run = async (
           collection.set(vscode.Uri.file(fsPath), diagnostics)
         }
       }
-
     }
 
     // Remove stale errors
@@ -92,6 +91,7 @@ const run = async (
 
       if (elmFilesToCompile.length > 0) {
         await compileElmFile(elmJsonFile, elmFilesToCompile)
+        console.info('errorHighlighting', `${Date.now()-start}ms`)
       }
     } else {
       console.error(`Couldn't find an elm.json file for ${uri.fsPath}`)
@@ -125,8 +125,8 @@ const Elm = {
         child_process.exec(command, async (err, _, stderr) => {
           if (err) {
             const ELM_BINARY_NOT_FOUND = 127
-            if (err.code === ELM_BINARY_NOT_FOUND) {
-              let response = await vscode.window.showErrorMessage(
+            if (err.code === ELM_BINARY_NOT_FOUND || err.message.includes(`'elm' is not recognized`)) {
+              let response = await vscode.window.showInformationMessage(
                 'Error highlighting requires "elm"',
                 { modal: true, detail: 'Click "Install" or disable "Error highlighting" in your settings.' },
                 'Install'

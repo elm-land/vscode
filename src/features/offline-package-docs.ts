@@ -421,7 +421,7 @@ export const feature: Feature = ({ globalState, context }) => {
 
       try {
         let [author, package_, version] = input.docsJsonFsPath
-          .split("/")
+          .split(path.sep)
           .slice(-4, -1)
 
         const panel = vscode.window.createWebviewPanel(

@@ -32,6 +32,7 @@ export const feature: Feature = ({ context, globalState }) => {
   )
 
   let disposable = vscode.commands.registerCommand('elmLand.htmlToElm', async () => {
+    let start = Date.now()
     // Get the current text editor
     let editor = vscode.window.activeTextEditor
     if (!editor) {
@@ -48,9 +49,10 @@ export const feature: Feature = ({ context, globalState }) => {
 
     // Replace the HTML with Elm  code
     if (elmCode) {
-      editor.edit(editBuilder => {
+      await editor.edit(editBuilder => {
         editBuilder.replace(selection, elmCode || '')
       })
+      console.info(`htmlToElm`, `${Date.now()-start}ms`)
     }
   })
 

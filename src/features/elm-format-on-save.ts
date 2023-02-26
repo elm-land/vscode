@@ -22,9 +22,11 @@ const provideDocumentFormattingEdits = async (
   options: vscode.FormattingOptions,
   token: vscode.CancellationToken
 ) => {
+  const start = Date.now()
   // User should disable this feature in the `[elm]` language settings
   try {
     let text = await runElmFormat(document)
+    console.info('formatOnSave', `${Date.now()-start}ms`)
     return [vscode.TextEdit.replace(getFullDocRange(document), text)]
   } catch (_) {
     return []
@@ -38,8 +40,8 @@ function runElmFormat(document: vscode.TextDocument): Promise<string> {
     const process_ = child_process.exec(command, async (err, stdout, stderr) => {
       if (err) {
         const ELM_FORMAT_BINARY_NOT_FOUND = 127
-        if (err.code === ELM_FORMAT_BINARY_NOT_FOUND) {
-          let response = await vscode.window.showErrorMessage(
+        if (err.code === ELM_FORMAT_BINARY_NOT_FOUND || err.message.includes(`'elm-format' is not recognized`)) {
+          let response = await vscode.window.showInformationMessage(
             'Format on save requires "elm-format"',
             { modal: true, detail: 'Please click "Install" or disable "Format on save" in your settings.' },
             'Install'

@@ -1,22 +1,27 @@
 # Elm Plugin for Visual Studio Code
 
-## Install
+## __Install__
 
 Visual Studio Code is available for Mac, Windows, and Linux.
 
 - [Download VS Code](https://code.visualstudio.com/)
 - [Install the "Elm Land" plugin](https://marketplace.visualstudio.com/items?itemName=elm-land.elm-land)
 
-## Highlighted Features
+## __Highlighted Features__
 
 - Syntax highlighting
 - Format on save
 - Error highlighting
 
-## Additional Features
+## __Additional Features__
 
 - Jump-to-definition
-- Find all usages
 - Offline-friendly package docs
 - Module import autocomplete
 - Convert HTML to Elm
+
+__More documentation__
+
+- 🧠 Learn more about [all of the features](https://github.com/elm-land/vscode/blob/main/docs/README.md#features)
+- 📊 View this plugin's [performance benchmarks](https://github.com/elm-land/vscode/blob/main/docs/README.md#performance-table)
+- 💖 Meet [the wonderful Elm folks](https://github.com/elm-land/vscode/blob/main/docs/README.md#thank-you-elm-community) that made this project possible
