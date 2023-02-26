@@ -100,13 +100,13 @@ To help you convert HTML snippets to Elm code and help newcomers learn the synta
 
 Elm's [editor plugins repo](https://github.com/elm/editor-plugins) recommends doing performance profiling to help others learn how different editors implement features, and also to help try to think of ways to bring down costs.
 
-This VS code plugin was specifically designed to have __near-zero memory overhead [¹](#¹-ram-overhead)__, and to __avoid in-memory indexing__ that cache your codebase before invoking features. For this reason, it's been very effective at [Vendr](https://vendr.com), even though the frontend codebase is __over 400k lines__ of Elm code.
+This VS code plugin was specifically designed to have __near-zero memory overhead [¹](#-ram-overhead)__, and to __avoid in-memory indexing__ that cache your codebase before invoking features. For this reason, it's been very effective at [Vendr](https://vendr.com), even though the frontend codebase is __over 400k lines__ of Elm code.
 
 ---
 
 ### `rtfeldman/elm-spa-example` (4K LOC, 34 files)
 
-These benchmarks were taken on a __Windows PC [²](#²-pc-specs)__ testing this plugin against [rtfeldman/elm-spa-example](https://github.com/rtfeldman/elm-spa-example) repository, which has 3.8k lines of Elm code across 34 files.
+These benchmarks were taken on a __Windows PC [²](#-pc-specs)__ testing this plugin against [rtfeldman/elm-spa-example](https://github.com/rtfeldman/elm-spa-example) repository, which has 3.8k lines of Elm code across 34 files.
 
 Feature | Average Speed | Constant RAM Overhead | Cumulative CPU Costs | Battery Implications
 :------ | :------------ | :-------------------- | :------------------- | :-------------------
