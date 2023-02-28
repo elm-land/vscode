@@ -13,6 +13,7 @@
   - [Convert HTML to Elm](#convert-html-to-elm)
 - 📊 [Performance Table](#performance-table)
 - 💖 [Thank you, Elm community](#thank-you-elm-community)
+- 🛠️ [Want to contribute?](#want-to-contribute)
 
 ## __Features__
 
@@ -100,38 +101,55 @@ To help you convert HTML snippets to Elm code and help newcomers learn the synta
 
 Elm's [editor plugins repo](https://github.com/elm/editor-plugins) recommends doing performance profiling to help others learn how different editors implement features, and also to help try to think of ways to bring down costs.
 
-This VS code plugin was specifically designed to have __near-zero memory overhead [¹](#-ram-overhead)__, and to __avoid in-memory indexing__ that cache your codebase before invoking features. For this reason, it's been very effective at [Vendr](https://vendr.com), even though the frontend codebase is __over 400k lines__ of Elm code.
+This VS code plugin was specifically designed to have __near-zero memory overhead [¹](#low-memory-overhead)__, and to __avoid in-memory indexing__ that cache your codebase before invoking features. For this reason, it's been very effective at [Vendr](https://vendr.com), even though the frontend codebase is __over 400k lines__ of Elm code.
 
----
+### __Massive Elm projects__ (578k lines of Elm)
 
-### `rtfeldman/elm-spa-example` (4K LOC, 34 files)
+These benchmarks were taken on a __MacBook Pro (2020) [²](#macbook-specs)__ testing this editor plugin against [Vendr](https://vendr.com)'s codebase, which has __578k lines of Elm code__ across 3,384 Elm files.
 
-These benchmarks were taken on a __Windows PC [²](#-pc-specs)__ testing this plugin against [rtfeldman/elm-spa-example](https://github.com/rtfeldman/elm-spa-example) repository, which has 3.8k lines of Elm code across 34 files.
-
-Feature | Average Speed | Constant RAM Overhead | Cumulative CPU Costs | Battery Implications
-:------ | :------------ | :-------------------- | :------------------- | :-------------------
-__Format on save__ | <500ms | _None_ | On command | notable
-__Error highlighting__| <500ms | _None_ | On file open and save | minimal
-__Jump-to-definition__ | <150ms | _None_ | On file open and save | notable
-__Offline package docs__ | <100ms | _None_ | On command | minimal
-__Module import autocomplete__ | <100ms | _None_ | On key stroke | minimal
-__Convert HTML to Elm__ | <100ms | _None_ | On command | minimal
+Feature | Average Speed | Constant RAM Overhead | Cumulative CPU Costs
+:------ | :------------ | :-------------------- | :-------------------
+__Format on save__ | <200ms | _None_ | On command
+__Error highlighting__| <500ms | _None_ | On file open and save
+__Jump-to-definition__ | <600ms | _None_ | On file open and save
+__Offline package docs__ | <400ms | _None_ | On command
+__Module import autocomplete__ | <100ms | _None_ | On key stroke
+__Convert HTML to Elm__ | <100ms | _None_ | On command
 
 
-#### __¹. RAM overhead__
+### __Medium-size projects__ (3.8k lines of Elm)
+
+These benchmarks were taken on a __Windows PC [³](#pc-specs)__ testing this editor plugin against [rtfeldman/elm-spa-example](https://github.com/rtfeldman/elm-spa-example) repository, which has __3.8k lines of Elm code__ across 34 files.
+
+Feature | Average Speed | Constant RAM Overhead | Cumulative CPU Costs
+:------ | :------------ | :-------------------- | :-------------------
+__Format on save__ | <300ms | _None_ | On command
+__Error highlighting__| <500ms | _None_ | On file open and save
+__Jump-to-definition__ | <150ms | _None_ | On file open and save
+__Offline package docs__ | <100ms | _None_ | On command
+__Module import autocomplete__ | <100ms | _None_ | On key stroke
+__Convert HTML to Elm__ | <100ms | _None_ | On command
+
+#### __Low memory overhead__
 
 The only in-memory overhead from this plugin comes from caching the contents of your `elm.json` files within the current workspace, and any `docs.json` files for packages that you are using.
 
-For example, if your project is using `elm/http@2.0.0`, the contents of `$ELM_HOME/0.19.1/packages/elm/http/2.0.0/docs.json` would be cached in working RAM to improve performance for the [Offline package docs](#offline-package-docs), [Module import autocomplete](#module-import-autocomplete), and [Jump-to-definition](#jump-to-definition) features.
+This means a __tiny project with 10 lines of Elm code__ and a __huge project with 500k+ lines of Elm code__ would have __the same RAM overhead__– assuming they both had the same Elm package dependencies.
 
-This means a __tiny project with 10 lines of Elm code__ and a __huge project with 500k+ lines of Elm code__, would have __the same RAM overhead__, assuming they had the same Elm package dependencies!
+#### __MacBook Specs__
 
-#### __². PC Specs__
+The MacBook Pro used for benchmarking had the following specifications:
+- __Model__: MacBook Pro (13-inch 2020)
+- __OS__: macOS Ventura 13.2.1
+- __Processor__: 1.7 GHz Quad-Core Intel Core i7
+- __Memory__: 16GB
 
-The Windows PC has the following specifications:
+#### __PC Specs__
+
+The Windows PC used for benchmarking has the following specifications:
 - __OS__: Windows 11 Home 64-bit
 - __Processor__: Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz (16 CPUs), ~2.4GHz
-- __Memory:__ 16GB RAM
+- __Memory:__ 16GB
 
 ## __Thank you, Elm community!__
 
@@ -175,3 +193,41 @@ Thank you [Rupert](https://github.com/rupertlssmith) and [pwentz](https://github
 Jim provided the HTML parser that powers the __HTML to Elm__ feature. The [jims/html-parser](https://github.com/jims/html-parser) package made it easy for to add the feature to help lower the learning curve for newcomers to Elm.
 
 Thank you, Jim! Your Elm package rocks!
+
+
+## __Want to contribute?__
+
+Great! This project is focused on the following high-level goals:
+
+1. __Every feature should work reliably.__
+
+    Any developer using Mac, Windows, or Linux should be able to download this plugin, and have it reliably work for any valid Elm project.
+
+2. __Create a fully configurable experience__
+
+    Many users prefer less visual noise when coding, or only want the Syntax Highlighting feature. We should support those folks by providing an easy way to opt-out of undesired editor features.
+
+3. __Minimize performance overhead__
+
+    Some features have been omitted because they had undesirable performance implications. When a company scales their Elm project, this plugin should scale with them!
+
+The goal of this plugin is to ensure every feature works reliably and scales with large Elm codebases. The tradeoff is that it doesn't have as many features as more robust plugins like [the Elm Language Server plugin](https://marketplace.visualstudio.com/items?itemName=Elmtooling.elm-ls-vscode).
+
+The features below have been left out for now, but you might be able to help add them to the official Elm Land plugin:
+
+### __"Find usages" and "Bulk rename"__
+
+Something that would make this plugin even better would be a "Find usages" feature. This would enable folks to quickly scan their Elm codebase for all occurences of any type or value.
+
+Back in 2019, Evan outlined a cool project for the community, [called `elm-find`](https://github.com/elm/projects#elm-find). Just like `elm-format` or `elm` itself, it would have the following characteristics:
+
+1. No constant RAM overhead
+2. Fast as possible
+
+If you are interested in creating a super fast tool to help improve the Elm ecosystem, we would love to benefit from your implementation of `elm-find`!
+
+Once that project is available, I can update this plugin to have features like __Find usages__ or __Bulk rename__.
+
+__Hoping to add another feature?__
+
+Come join the [Elm Land Discord](https://join.elm.land) and start a conversation in `#vscode`!

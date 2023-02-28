@@ -1,4 +1,5 @@
 import * as vscode from "vscode"
+import * as os from "os"
 import * as child_process from "child_process"
 import { Feature } from "./shared/logic"
 
@@ -6,7 +7,7 @@ export const feature: Feature = ({ context }) => {
   context.subscriptions.push(
     vscode.commands.registerCommand('elmLand.installElmFormat', () => {
       const terminal = vscode.window.createTerminal(`Install elm-format`)
-      terminal.sendText("npm install -g elm-format")
+      terminal.sendText(`(cd ${os.homedir()} && npm install -g elm-format@0.8.5)`)
       terminal.show()
     })
   )
@@ -26,7 +27,7 @@ const provideDocumentFormattingEdits = async (
   // User should disable this feature in the `[elm]` language settings
   try {
     let text = await runElmFormat(document)
-    console.info('formatOnSave', `${Date.now()-start}ms`)
+    console.info('formatOnSave', `${Date.now() - start}ms`)
     return [vscode.TextEdit.replace(getFullDocRange(document), text)]
   } catch (_) {
     return []
@@ -41,9 +42,9 @@ function runElmFormat(document: vscode.TextDocument): Promise<string> {
       if (err) {
         const ELM_FORMAT_BINARY_NOT_FOUND = 127
         if (err.code === ELM_FORMAT_BINARY_NOT_FOUND || err.message.includes(`'elm-format' is not recognized`)) {
-          let response = await vscode.window.showInformationMessage(
-            'Format on save requires "elm-format"',
-            { modal: true, detail: 'Please click "Install" or disable "Format on save" in your settings.' },
+          let response = await vscode.window.showWarningMessage(
+            'The "Format on save" feature requires "elm-format"',
+            { modal: false },
             'Install'
           )
           if (response === 'Install') {

@@ -1,5 +1,6 @@
 import * as child_process from 'child_process'
 import * as path from 'path'
+import * as os from 'os'
 import * as vscode from 'vscode'
 import * as autodetectElmJson from './shared/autodetect-elm-json'
 import { GlobalState } from './shared/autodetect-elm-json'
@@ -13,16 +14,16 @@ export const feature: Feature = ({ globalState, context }) => {
   context.subscriptions.push(
     vscode.commands.registerCommand('elmLand.installElm', () => {
       const terminal = vscode.window.createTerminal(`Install elm`)
-      terminal.sendText("npm install -g elm")
+      terminal.sendText(`(cd ${os.homedir()} && npm install -g elm@0.19.1)`)
       terminal.show()
     })
   )
 
   context.subscriptions.push(
-    vscode.workspace.onDidOpenTextDocument(document => run(globalState, diagnostics, document, 'open'))
+    vscode.workspace.onDidOpenTextDocument(document => run(globalState, diagnostics, document))
   )
   context.subscriptions.push(
-    vscode.workspace.onDidSaveTextDocument(document => run(globalState, diagnostics, document, 'save'))
+    vscode.workspace.onDidSaveTextDocument(document => run(globalState, diagnostics, document))
   )
   context.subscriptions.push(diagnostics)
 
@@ -33,7 +34,7 @@ export const feature: Feature = ({ globalState, context }) => {
 
     if (document.uri.fsPath.endsWith('elm.json')) {
       await autodetectElmJson.run(globalState)
-      await run(globalState, diagnostics, document, 'open')
+      await run(globalState, diagnostics, document)
     }
   }
   context.subscriptions.push(
@@ -48,8 +49,7 @@ export const feature: Feature = ({ globalState, context }) => {
 const run = async (
   globalState: GlobalState,
   collection: vscode.DiagnosticCollection,
-  document: vscode.TextDocument,
-  event: 'open' | 'save'
+  document: vscode.TextDocument
 ) => {
   let start = Date.now()
   // Allow user to disable this feature
@@ -91,7 +91,7 @@ const run = async (
 
       if (elmFilesToCompile.length > 0) {
         await compileElmFile(elmJsonFile, elmFilesToCompile)
-        console.info('errorHighlighting', `${Date.now()-start}ms`)
+        console.info('errorHighlighting', `${Date.now() - start}ms`)
       }
     } else {
       console.error(`Couldn't find an elm.json file for ${uri.fsPath}`)
@@ -127,8 +127,8 @@ const Elm = {
             const ELM_BINARY_NOT_FOUND = 127
             if (err.code === ELM_BINARY_NOT_FOUND || err.message.includes(`'elm' is not recognized`)) {
               let response = await vscode.window.showInformationMessage(
-                'Error highlighting requires "elm"',
-                { modal: true, detail: 'Click "Install" or disable "Error highlighting" in your settings.' },
+                'The "Error highlighting" feature requires "elm"',
+                { modal: false },
                 'Install'
               )
 
