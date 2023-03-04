@@ -28,8 +28,7 @@ export const feature: Feature = ({ globalState, context }) => {
 
       if (elmJsonFile && ast) {
         let foo: ElmJsonFile = elmJsonFile
-        let packages =
-          SharedLogic.getMappingOfPackageNameToDocJsonFilepath(elmJsonFile)
+        let packages = await SharedLogic.getMappingOfModuleNameToDocJsonFilepath(globalState, elmJsonFile)
         let details: JumpToDocDetails[] = []
         let links: vscode.DocumentLink[] = []
 
@@ -82,10 +81,10 @@ export const feature: Feature = ({ globalState, context }) => {
         if (settings === "Enabled") {
           let moduleImportTracker = ElmSyntax.createModuleImportTracker(ast)
 
-          const findPackageLinksInDeclaration = (
+          const findPackageLinksInDeclaration = async (
             declaration: ElmSyntax.Declaration,
             namesToIgnore: string[]
-          ): vscode.DocumentLink[] => {
+          ): Promise<vscode.DocumentLink[]> => {
             let links: vscode.DocumentLink[] = []
             switch (declaration.type) {
               case "destructuring":
@@ -99,14 +98,14 @@ export const feature: Feature = ({ globalState, context }) => {
                   declaration.function.signature?.value.typeAnnotation.value
                 ) {
                   links.push(
-                    ...findPackageLinksInAnnotation(
+                    ...await findPackageLinksInAnnotation(
                       declaration.function.signature.value.typeAnnotation,
                       namesToIgnore
                     )
                   )
                 }
                 links.push(
-                  ...findPackageLinksInExpression(
+                  ...await findPackageLinksInExpression(
                     declaration.function.declaration.value.expression,
                     namesToIgnore
                   )
@@ -127,17 +126,17 @@ export const feature: Feature = ({ globalState, context }) => {
               case "typedecl":
                 for (let constructor of declaration.typedecl.constructors) {
                   for (let arg of constructor.value.arguments) {
-                    links.push(...findPackageLinksInAnnotation(arg, namesToIgnore))
+                    links.push(...await findPackageLinksInAnnotation(arg, namesToIgnore))
                   }
                 }
                 return links
             }
           }
 
-          const findPackageLinksInExpression = (
+          const findPackageLinksInExpression = async (
             expression: ElmSyntax.Node<ElmSyntax.Expression>,
             namesToIgnore: string[]
-          ): vscode.DocumentLink[] => {
+          ): Promise<vscode.DocumentLink[]> => {
             let links: vscode.DocumentLink[] = []
 
             switch (expression.value.type) {
@@ -160,7 +159,7 @@ export const feature: Feature = ({ globalState, context }) => {
                   expression.value.ifBlock.else,
                   expression.value.ifBlock.clause,
                 ]) {
-                  links.push(...findPackageLinksInExpression(node, namesToIgnore))
+                  links.push(...await findPackageLinksInExpression(node, namesToIgnore))
                 }
                 return links
               case "lambda":
@@ -169,7 +168,7 @@ export const feature: Feature = ({ globalState, context }) => {
                 }
                 let newNamesToIgnore = namesToIgnore.concat(expression.value.lambda.patterns.flatMap(ElmSyntax.toPatternDefinitionNames))
                 links.push(
-                  ...findPackageLinksInExpression(
+                  ...await findPackageLinksInExpression(
                     expression.value.lambda.expression,
                     newNamesToIgnore
                   )
@@ -179,11 +178,11 @@ export const feature: Feature = ({ globalState, context }) => {
                 let newNamesToIgnore2 = namesToIgnore.concat(expression.value.let.declarations.map(ElmSyntax.toDeclarationName).filter(isNotNull))
                 for (let declaration of expression.value.let.declarations) {
                   links.push(
-                    ...findPackageLinksInDeclaration(declaration.value, newNamesToIgnore2)
+                    ...await findPackageLinksInDeclaration(declaration.value, newNamesToIgnore2)
                   )
                 }
                 links.push(
-                  ...findPackageLinksInExpression(
+                  ...await findPackageLinksInExpression(
                     expression.value.let.expression,
                     newNamesToIgnore2
                   )
@@ -191,7 +190,7 @@ export const feature: Feature = ({ globalState, context }) => {
                 return links
               case "list":
                 for (let node of expression.value.list) {
-                  links.push(...findPackageLinksInExpression(node, namesToIgnore))
+                  links.push(...await findPackageLinksInExpression(node, namesToIgnore))
                 }
                 return links
               case "parenthesized":
@@ -202,14 +201,14 @@ export const feature: Feature = ({ globalState, context }) => {
               case "record":
                 for (let node of expression.value.record) {
                   links.push(
-                    ...findPackageLinksInExpression(node.value.expression, namesToIgnore)
+                    ...await findPackageLinksInExpression(node.value.expression, namesToIgnore)
                   )
                 }
                 return links
               case "recordAccess":
                 // TODO: What's `recordAccess.name`?
                 links.push(
-                  ...findPackageLinksInExpression(
+                  ...await findPackageLinksInExpression(
                     expression.value.recordAccess.expression,
                     namesToIgnore
                   )
@@ -218,22 +217,22 @@ export const feature: Feature = ({ globalState, context }) => {
               case "recordUpdate":
                 for (let node of expression.value.recordUpdate.updates) {
                   links.push(
-                    ...findPackageLinksInExpression(node.value.expression, namesToIgnore)
+                    ...await findPackageLinksInExpression(node.value.expression, namesToIgnore)
                   )
                 }
                 return links
               case "tupled":
                 for (let node of expression.value.tupled) {
-                  links.push(...findPackageLinksInExpression(node, namesToIgnore))
+                  links.push(...await findPackageLinksInExpression(node, namesToIgnore))
                 }
                 return links
               case "application":
                 for (let node of expression.value.application) {
-                  links.push(...findPackageLinksInExpression(node, namesToIgnore))
+                  links.push(...await findPackageLinksInExpression(node, namesToIgnore))
                 }
                 return links
               case "case":
-                links = findPackageLinksInExpression(
+                links = await findPackageLinksInExpression(
                   expression.value.case.expression,
                   namesToIgnore
                 )
@@ -241,7 +240,7 @@ export const feature: Feature = ({ globalState, context }) => {
                   let newNamesToIgnore = namesToIgnore.concat(ElmSyntax.toPatternDefinitionNames(node.pattern))
 
                   links.push(...findPackageLinksInPattern(node.pattern, namesToIgnore))
-                  links.push(...findPackageLinksInExpression(node.expression, newNamesToIgnore))
+                  links.push(...await findPackageLinksInExpression(node.expression, newNamesToIgnore))
                 }
                 return links
               case "functionOrValue":
@@ -261,7 +260,8 @@ export const feature: Feature = ({ globalState, context }) => {
                 for (let moduleName of moduleNames) {
                   let docsJsonFsPath = packages[moduleName]
                   if (docsJsonFsPath) {
-                    let typeOrValueName = SharedLogic.doesModuleExposesValue(
+                    let typeOrValueName = await SharedLogic.doesModuleExposesValue(
+                      globalState,
                       foo,
                       moduleName,
                       functionOrValueName
@@ -283,21 +283,21 @@ export const feature: Feature = ({ globalState, context }) => {
             }
           }
 
-          const findPackageLinksInAnnotation = (
+          const findPackageLinksInAnnotation = async (
             annotation: ElmSyntax.Node<ElmSyntax.TypeAnnotation>,
             namesToIgnore: string[]
-          ): vscode.DocumentLink[] => {
+          ): Promise<vscode.DocumentLink[]> => {
             let links: vscode.DocumentLink[] = []
             switch (annotation.value.type) {
               case "function":
                 links.push(
-                  ...findPackageLinksInAnnotation(
+                  ...await findPackageLinksInAnnotation(
                     annotation.value.function.left,
                     namesToIgnore
                   )
                 )
                 links.push(
-                  ...findPackageLinksInAnnotation(
+                  ...await findPackageLinksInAnnotation(
                     annotation.value.function.right,
                     namesToIgnore
                   )
@@ -308,20 +308,20 @@ export const feature: Feature = ({ globalState, context }) => {
               case "genericRecord":
                 for (let field of annotation.value.genericRecord.values.value) {
                   links.push(
-                    ...findPackageLinksInAnnotation(field.value.typeAnnotation, namesToIgnore)
+                    ...await findPackageLinksInAnnotation(field.value.typeAnnotation, namesToIgnore)
                   )
                 }
                 return links
               case "record":
                 for (let field of annotation.value.record.value) {
                   links.push(
-                    ...findPackageLinksInAnnotation(field.value.typeAnnotation, namesToIgnore)
+                    ...await findPackageLinksInAnnotation(field.value.typeAnnotation, namesToIgnore)
                   )
                 }
                 return links
               case "tupled":
                 for (let annotation_ of annotation.value.tupled.values) {
-                  links.push(...findPackageLinksInAnnotation(annotation_, namesToIgnore))
+                  links.push(...await findPackageLinksInAnnotation(annotation_, namesToIgnore))
                 }
                 return links
               case "typed":
@@ -345,12 +345,13 @@ export const feature: Feature = ({ globalState, context }) => {
                 for (let moduleName of moduleNames) {
                   let docsJsonFsPath = packages[moduleName]
                   if (docsJsonFsPath) {
-                    let typeOrValueName = SharedLogic.doesModuleExposesValue(
+                    let typeOrValueName = await SharedLogic.doesModuleExposesValue(
+                      globalState,
                       foo,
                       moduleName,
                       typedAnnotationName
                     )
-                    if (typeOrValueName) {
+                    if (typeOrValueName || moduleName === 'List') {
                       let range = SharedLogic.fromElmRange(
                         annotation.value.typed.moduleNameAndName.range
                       )
@@ -366,7 +367,7 @@ export const feature: Feature = ({ globalState, context }) => {
                 }
 
                 for (let arg of annotation.value.typed.args) {
-                  links.push(...findPackageLinksInAnnotation(arg, namesToIgnore))
+                  links.push(...await findPackageLinksInAnnotation(arg, namesToIgnore))
                 }
 
                 return links
@@ -385,7 +386,7 @@ export const feature: Feature = ({ globalState, context }) => {
           let isNotNull = <T>(x: T | null): x is T => x !== null
           let declarationNames = ast.declarations.map(ElmSyntax.toDeclarationName).filter(isNotNull)
           for (let declarationNode of ast.declarations) {
-            links.push(...findPackageLinksInDeclaration(declarationNode.value, declarationNames))
+            links.push(...await findPackageLinksInDeclaration(declarationNode.value, declarationNames))
           }
         }
 
@@ -415,25 +416,25 @@ export const feature: Feature = ({ globalState, context }) => {
           )
         )
       ) as JumpToDocDetails
-      // globalState.jumpToDocDetails = undefined
 
       if (!input) return
 
-      try {
-        let [author, package_, version] = input.docsJsonFsPath
-          .split(path.sep)
-          .slice(-4, -1)
+      let [author, package_, version] = input.docsJsonFsPath
+        .split(path.sep)
+        .slice(-4, -1)
 
-        const panel = vscode.window.createWebviewPanel(
-          "webview", // Identifies the type of the webview. Used internally
-          `${author}/${package_}`, // Title of the panel displayed to the user
-          vscode.ViewColumn.Beside, // Editor column to show the new webview panel in.
-          {
-            enableScripts: true,
-            retainContextWhenHidden: true,
-            enableFindWidget: true,
-          }
-        )
+      const panel = vscode.window.createWebviewPanel(
+        "webview", // Identifies the type of the webview. Used internally
+        `${author}/${package_}`, // Title of the panel displayed to the user
+        vscode.ViewColumn.Beside, // Editor column to show the new webview panel in.
+        {
+          enableScripts: true,
+          retainContextWhenHidden: true,
+          enableFindWidget: true,
+        }
+      )
+
+      try {
         panel.iconPath = vscode.Uri.joinPath(
           context.extensionUri,
           "src",
@@ -513,7 +514,30 @@ export const feature: Feature = ({ globalState, context }) => {
 
         // And set its HTML content
         panel.webview.html = getWebviewContent()
-      } catch (_) { }
+      } catch (_) {
+        panel.webview.html = `<!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Elm Packages</title>
+          <style>
+            body { line-height: 1.5; }
+          </style>
+        </head>
+        <body>
+          <h1>Elm Packages</h1>
+          <p>You're seeing this page because the Elm Land plugin couldn't find <code>${author}/${package_}</code> installed on this machine.</p>
+          <p>This usually only happens if your <code>ELM_HOME</code> directory was deleted some time after opening VS code.</p>
+          <p>The plugin should have <strong>automatically</strong> fixed this issue, but you can resolve it manually by following these steps:</p>
+          <ol>
+            <li>Delete your <code>elm-stuff</code> folder</li>
+            <li>Save any <code>.elm</code> file in your project</li>
+          </ol>
+          <p>After that, your package links should be working as expected!</p>
+        </body>
+        </html>`
+      }
     })
   )
 }

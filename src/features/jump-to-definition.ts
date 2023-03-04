@@ -132,50 +132,11 @@ const provider = (globalState: GlobalState) => {
   }
 
   const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFile, packages }: HandleJumpToLinksForDeclarationsInput): Promise<vscode.Location | null> => {
-    // Need to build up a collection of which types and values
-    // are being exposed by all imports.
-    // (This will be useful later when jumping to definitions)
-    // 
-    // This starts by accounting for the stuff implicitly imported in
-    // every Elm module:
-    // 
-    //    import Basics exposing (..)
-    //    import List exposing (List, (::))
-    //    import Maybe exposing (Maybe(..))
-    //    import Result exposing (Result(..))
-    //    import String exposing (String)
-    //    import Char exposing (Char)
-    //    import Tuple
-    //    import Debug
-    //    import Platform exposing ( Program )
-    //    import Platform.Cmd as Cmd exposing ( Cmd )
-    //    import Platform.Sub as Sub exposing ( Sub )
-    // 
-    type ImportAlias = string
-    type ExposedValue = string
-    type ModuleName = string
-    let explicitExposingValuesForImports: Record<ExposedValue, ModuleName[]> = {
-      'List': ['List'],
-      '(::)': ['List'],
-      'Maybe': ['Maybe'],
-      'Just': ['Maybe'],
-      'Nothing': ['Maybe'],
-      'Result': ['Result'],
-      'Ok': ['Result'],
-      'Err': ['Result'],
-      'String': ['String'],
-      'Char': ['Char'],
-      'Program': ['Platform'],
-      'Cmd': ['Platform.Cmd'],
-      'Sub': ['Platform.Sub'],
-    }
-    let hasUnknownImportsFromExposingAll: ModuleName[] = [
-      'Basics'
-    ]
-    let aliasMappingToModuleNames: Record<ImportAlias, ModuleName[]> = {
-      'Cmd': ['Platform.Cmd'],
-      'Sub': ['Platform.Sub']
-    }
+    let {
+      aliasMappingToModuleNames,
+      explicitExposingValuesForImports,
+      hasUnknownImportsFromExposingAll
+    } = ElmSyntax.getInitialPreludeMappings()
 
     const findImportedModuleNamesThatMightHaveExposedThisValue = (moduleName: string): string[] => {
       let explicitMatches = explicitExposingValuesForImports[moduleName] || []
@@ -191,7 +152,6 @@ const provider = (globalState: GlobalState) => {
       <item>({ findItemWithName, isItemExposedFromModule }: FindLocationOfItemFromImportedFilesInput<item>) =>
         async (importModuleNames: string[], moduleName: string) => {
           for (let importedModuleName of importModuleNames) {
-            // POST-MATURE OPTIMIZATION: Opportunity to make these filesystem calls in parallel
             let importedModuleNameUri = await findLocalProjectFileUri(elmJsonFile, importedModuleName)
 
             if (importedModuleNameUri) {
@@ -1021,7 +981,7 @@ const provider = (globalState: GlobalState) => {
           }
 
           // Handle module imports
-          let packages = sharedLogic.getMappingOfPackageNameToDocJsonFilepath(elmJsonFile)
+          let packages = await sharedLogic.getMappingOfModuleNameToDocJsonFilepath(globalState, elmJsonFile)
           matchingLocation = await handleJumpToLinksForImports({ document: doc, position, ast, elmJsonFile, packages })
           if (matchingLocation) {
             console.info('provideDefinition', `${Date.now() - start}ms`)

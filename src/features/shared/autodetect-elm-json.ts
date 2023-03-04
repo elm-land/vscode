@@ -1,11 +1,13 @@
 import * as os from 'os'
 import * as path from 'path'
 import * as vscode from 'vscode'
-import { Dependency, ElmJsonFile } from './elm-json-file'
+import { Dependency, ElmJsonFile, ModuleDoc } from './elm-json-file'
 import sharedLogic from './logic'
 
 export type GlobalState = {
+  isFirstTimeRunningPlugin: boolean
   elmJsonFiles: ElmJsonFile[]
+  cachedDocs: Record<string, ModuleDoc[]>
   jumpToDocDetails: JumpToDocDetails[] | undefined
 }
 
@@ -26,10 +28,20 @@ export const initialize = async ({ globalState, context }: {
   context.subscriptions.push(
     vscode.workspace.onDidChangeWorkspaceFolders(async () => await run(globalState))
   )
+
+  // Watch all "elm.json" files for changes
+  // 
+  // This means that when a user runs "elm install", the plugin
+  // should correctly detect those new Elm packages
+  let watcher = vscode.workspace.createFileSystemWatcher('**/elm.json')
+  context.subscriptions.push(watcher.onDidCreate(async () => await run(globalState)))
+  context.subscriptions.push(watcher.onDidChange(async () => await run(globalState)))
+  context.subscriptions.push(watcher.onDidDelete(async () => await run(globalState)))
 }
 
 // Rescan the file system for `elm.json` files
 export const run = async (globalState: GlobalState) => {
+  let start = Date.now()
   let config = vscode.workspace.getConfiguration('elmLand')
 
   let settings: Settings = {
@@ -39,6 +51,8 @@ export const run = async (globalState: GlobalState) => {
   let elmJsonFileUris = await vscode.workspace.findFiles('**/elm.json', '**/node_modules/**', 10)
   let possibleElmJsonFiles = await Promise.all(toElmJsonFiles({ elmJsonFileUris, settings }))
   globalState.elmJsonFiles = possibleElmJsonFiles.filter(sharedLogic.isDefined)
+  globalState.cachedDocs = {}
+  console.info(`autodetectElmJson`, `${Date.now() - start}ms`)
 }
 
 type Input = {
@@ -125,25 +139,15 @@ const toElmJsonFiles = ({ settings, elmJsonFileUris }: Input): Promise<ElmJsonFi
           let toDocsFilepath = (packageUserAndName: string, packageVersion: string) =>
             path.join(elmHome, version, 'packages', ...packageUserAndName.split('/'), packageVersion, 'docs.json')
 
-          let toDocsJson = async (packageUserAndName: string, packageVersion: string) => {
-            let fsPath = toDocsFilepath(packageUserAndName, packageVersion)
-            // TODO: Make sure that docs are installed before running this step
-            let buffer = await vscode.workspace.fs.readFile(vscode.Uri.file(fsPath))
-            let contents = Buffer.from(buffer).toString('utf8')
-            let json = JSON.parse(contents)
-            return { fsPath, docs: json }
-          }
-
           dependencies =
             await Promise.all(
               Object.entries(elmJson['dependencies']['direct'])
                 .map(async ([packageUserAndName, packageVersion]) => {
-                  let { fsPath, docs } = await toDocsJson(packageUserAndName, packageVersion)
+                  let fsPath = toDocsFilepath(packageUserAndName, packageVersion)
                   return {
                     packageUserAndName,
                     packageVersion,
-                    fsPath,
-                    docs
+                    fsPath
                   }
                 })
             )

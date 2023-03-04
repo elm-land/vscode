@@ -1,6 +1,6 @@
 import path = require('path')
 import * as vscode from 'vscode'
-import { Alias, BinOp, Dependency, ElmJsonFile, ModuleDoc, Union, Value } from './shared/elm-json-file'
+import { Alias, BinOp, Dependency, ElmJsonFile, getDocumentationForElmPackage, ModuleDoc, Union, Value } from './shared/elm-json-file'
 import SharedLogic, { Feature } from './shared/logic'
 import * as ElmToAst from './shared/elm-to-ast'
 import * as ElmSyntax from './shared/elm-to-ast/elm-syntax'
@@ -56,7 +56,8 @@ export const feature: Feature = ({ globalState, context }) => {
             // Include all the package module names
             let packageModuleDocs: [ModuleDoc, Dependency][] = []
             for (let dependency of elmJson.dependencies) {
-              for (let moduleDoc of dependency.docs) {
+              let docs = await getDocumentationForElmPackage(globalState, dependency.fsPath)
+              for (let moduleDoc of docs) {
                 if (moduleDoc.name.startsWith(moduleName)) {
                   packageModuleDocs.push([moduleDoc, dependency])
                   allModuleNames.push(moduleDoc.name)
@@ -149,13 +150,16 @@ const toModuleDoc = (ast: ElmSyntax.Ast): ModuleDoc => {
     if (moduleDefinition.exposingList.value.type === 'all') {
       return true
     } else {
-      moduleDefinition.exposingList.value.explicit.find(node => {
+      let match = moduleDefinition.exposingList.value.explicit.find(node => {
         if (node.value.type === 'typeexpose') {
           if (node.value.typeexpose.name === unionName) {
             return true
           }
         }
       })
+      if (match) {
+        return true
+      }
     }
     return false
   }

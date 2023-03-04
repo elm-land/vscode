@@ -1,6 +1,6 @@
 import * as vscode from 'vscode'
 import * as AutodetectElmJson from './autodetect-elm-json'
-import { ElmJsonFile } from './elm-json-file'
+import { ElmJsonFile, getDocumentationForElmPackage } from './elm-json-file'
 
 export type Feature =
   (args: {
@@ -23,14 +23,16 @@ let findElmJsonFor = (globalState: AutodetectElmJson.GlobalState, uri: vscode.Ur
   }
 }
 
-const getMappingOfPackageNameToDocJsonFilepath = (elmJsonFile: ElmJsonFile) => {
+const getMappingOfModuleNameToDocJsonFilepath = async (globalState: AutodetectElmJson.GlobalState, elmJsonFile: ElmJsonFile): Promise<Record<string, string>> => {
   let packages: { [key: string]: string } = {}
   const dependencies = elmJsonFile.dependencies
   for (let dep of dependencies) {
-    for (let doc of dep.docs) {
+    let docs = await getDocumentationForElmPackage(globalState, dep.fsPath)
+    for (let doc of docs) {
       packages[doc.name] = dep.fsPath
     }
   }
+
   return packages
 }
 
@@ -59,9 +61,10 @@ const fromElmRange = (array: [number, number, number, number]): vscode.Range =>
 const isDefined = <T>(input: T | undefined): input is T =>
   input !== undefined
 
-const doesModuleExposesValue = (elmJsonFile: ElmJsonFile, moduleName: string, typeOrValueName: string): string | undefined => {
+const doesModuleExposesValue = async (globalState: AutodetectElmJson.GlobalState, elmJsonFile: ElmJsonFile, moduleName: string, typeOrValueName: string): Promise<string | undefined> => {
   for (let dependency of elmJsonFile.dependencies) {
-    for (let moduleDoc of dependency.docs) {
+    let docs = await getDocumentationForElmPackage(globalState, dependency.fsPath)
+    for (let moduleDoc of docs) {
       if (moduleDoc.name === moduleName) {
         let match = [
           ...moduleDoc.aliases.map(x => ({ typeOrValueName: x.name, items: [x.name] })),
@@ -100,7 +103,7 @@ export default {
   pluginId: 'elmLand',
   findElmJsonFor,
   fromElmRange,
-  getMappingOfPackageNameToDocJsonFilepath,
+  getMappingOfModuleNameToDocJsonFilepath,
   findFirstOccurenceOfWordInFile,
   isDefined,
   doesModuleExposesValue,

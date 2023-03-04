@@ -370,30 +370,35 @@ export type ModuleImportTracker = {
   findImportedModuleNamesForQualifiedValue: (moduleName: string) => string[]
 }
 
-export const createModuleImportTracker = (ast: Ast): ModuleImportTracker => {
-  // Need to build up a collection of which types and values
-  // are being exposed by all imports.
-  // (This will be useful later when jumping to definitions)
-  // 
-  // This starts by accounting for the stuff implicitly imported in
-  // every Elm module:
-  // 
-  //    import Basics exposing (..)
-  //    import List exposing (List, (::))
-  //    import Maybe exposing (Maybe(..))
-  //    import Result exposing (Result(..))
-  //    import String exposing (String)
-  //    import Char exposing (Char)
-  //    import Tuple
-  //    import Debug
-  //    import Platform exposing ( Program )
-  //    import Platform.Cmd as Cmd exposing ( Cmd )
-  //    import Platform.Sub as Sub exposing ( Sub )
-  // 
-  type ImportAlias = string
-  type ExposedValue = string
-  type ModuleName = string
-  let explicitExposingValuesForImports: Record<ExposedValue, ModuleName[]> = {
+// Need to build up a collection of which types and values
+// are being exposed by all imports.
+// (This will be useful later when jumping to definitions)
+// 
+// This starts by accounting for the stuff implicitly imported in
+// every Elm module:
+// 
+//    import Basics exposing (..)
+//    import List exposing (List, (::))
+//    import Maybe exposing (Maybe(..))
+//    import Result exposing (Result(..))
+//    import String exposing (String)
+//    import Char exposing (Char)
+//    import Tuple
+//    import Debug
+//    import Platform exposing ( Program )
+//    import Platform.Cmd as Cmd exposing ( Cmd )
+//    import Platform.Sub as Sub exposing ( Sub )
+// 
+type ImportAlias = string
+type ExposedValue = string
+type ModuleName = string
+type InitialPreludeData = {
+  explicitExposingValuesForImports: Record<ExposedValue, ModuleName[]>
+  hasUnknownImportsFromExposingAll: ModuleName[]
+  aliasMappingToModuleNames: Record<ImportAlias, ModuleName[]>
+}
+export let getInitialPreludeMappings = (): InitialPreludeData => ({
+  explicitExposingValuesForImports: {
     'List': ['List'],
     '(::)': ['List'],
     'Maybe': ['Maybe'],
@@ -407,15 +412,20 @@ export const createModuleImportTracker = (ast: Ast): ModuleImportTracker => {
     'Program': ['Platform'],
     'Cmd': ['Platform.Cmd'],
     'Sub': ['Platform.Sub'],
-  }
-  let hasUnknownImportsFromExposingAll: ModuleName[] = [
-    'Basics'
-  ]
-  let aliasMappingToModuleNames: Record<ImportAlias, ModuleName[]> = {
+  },
+  hasUnknownImportsFromExposingAll: ['Basics'],
+  aliasMappingToModuleNames: {
     'Cmd': ['Platform.Cmd'],
     'Sub': ['Platform.Sub']
   }
+})
 
+export const createModuleImportTracker = (ast: Ast): ModuleImportTracker => {
+  let {
+    aliasMappingToModuleNames,
+    explicitExposingValuesForImports,
+    hasUnknownImportsFromExposingAll
+  } = getInitialPreludeMappings()
   // Keep track of module import `exposing` statements
   for (let import_ of ast.imports) {
     const moduleNameNode = import_.value.moduleName

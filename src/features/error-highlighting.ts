@@ -92,6 +92,12 @@ const run = async (
       if (elmFilesToCompile.length > 0) {
         await compileElmFile(elmJsonFile, elmFilesToCompile)
         console.info('errorHighlighting', `${Date.now() - start}ms`)
+
+        if (globalState.isFirstTimeRunningPlugin) {
+          globalState.isFirstTimeRunningPlugin = false
+          // Packages should now be installed, re-run the autodetect script
+          await autodetectElmJson.run(globalState)
+        }
       }
     } else {
       console.error(`Couldn't find an elm.json file for ${uri.fsPath}`)

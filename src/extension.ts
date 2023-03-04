@@ -12,7 +12,12 @@ export async function activate(context: vscode.ExtensionContext) {
   console.info("ACTIVATE")
 
   // Global context available to functions below
-  let globalState: GlobalState = { elmJsonFiles: [], jumpToDocDetails: undefined }
+  let globalState: GlobalState = {
+    isFirstTimeRunningPlugin: true,
+    elmJsonFiles: [],
+    cachedDocs: {},
+    jumpToDocDetails: undefined
+  }
   context.subscriptions.push({
     dispose: () => { globalState = undefined as any }
   })
