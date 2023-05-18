@@ -481,9 +481,12 @@ export const createModuleImportTracker = (ast: Ast): ModuleImportTracker => {
 export const fromTypeAnnotationToString = (node: Node<TypeAnnotation>): string => {
   switch (node.value.type) {
     case 'function':
-      return [fromTypeAnnotationToString(node.value.function.left),
-      fromTypeAnnotationToString(node.value.function.right)
-      ].join(' -> ')
+      const leftSide =
+        (node.value.function.left.value.type === 'function')
+          ? '(' + fromTypeAnnotationToString(node.value.function.left) + ')'
+          : fromTypeAnnotationToString(node.value.function.left)
+
+      return `${leftSide} -> ${fromTypeAnnotationToString(node.value.function.right)}`
     case 'generic':
       return node.value.generic.value
     case 'genericRecord':
