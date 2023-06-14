@@ -36,8 +36,7 @@ init html =
     )
 
 
-
-fromHtmlToElm : String -> Result String String
+fromHtmlToElm : String -> Maybe String
 fromHtmlToElm html =
     case
         html
@@ -49,10 +48,10 @@ fromHtmlToElm html =
             |> Result.map toElmString
     of
         Ok elmCode ->
-            Ok elmCode
+            Just elmCode
 
         Err problem ->
-            Err (Debug.toString problem)
+            Nothing
             
 
 toElmString : List Html.Parser.Node -> String
