@@ -36,20 +36,24 @@ init html =
     )
 
 
-fromHtmlToElm : String -> Maybe String
+
+fromHtmlToElm : String -> Result String String
 fromHtmlToElm html =
     case
         html
+            |> String.replace "<path " "<pathmango "
+            |> String.replace "</path>" "</pathmango>"
+            |> String.replace "<path>" "<pathmango>"
             |> String.trim
             |> Html.Parser.run
             |> Result.map toElmString
     of
         Ok elmCode ->
-            Just elmCode
+            Ok elmCode
 
         Err problem ->
-            Nothing
-
+            Err (Debug.toString problem)
+            
 
 toElmString : List Html.Parser.Node -> String
 toElmString elements =
@@ -76,7 +80,8 @@ toElmString elements =
                         |> Elm.Pretty.prettyExpression
     in
     Pretty.pretty 80 doc
-
+    
+    
 
 toNodeExpression : Html.Parser.Node -> Maybe Elm.Syntax.Expression.Expression
 toNodeExpression node =
@@ -104,7 +109,9 @@ toNodeExpression node =
                                     [ Elm.Syntax.Expression.FunctionOrValue [] match ]
 
                                 Nothing ->
-                                    if tagName == "main" || tagName == "text" then
+                                    if tagName == "pathmango" then
+                                        [ Elm.Syntax.Expression.FunctionOrValue [] ("path") ]
+                                    else if tagName == "main" || tagName == "text" then
                                         [ Elm.Syntax.Expression.FunctionOrValue [] (tagName ++ "_") ]
 
                                     else
