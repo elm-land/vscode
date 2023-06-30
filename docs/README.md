@@ -182,7 +182,7 @@ Kolja's work on the [elm-tooling/elm-language-client-vscode](https://github.com/
 
 Thank you Kolja, and the folks in `elm-community`, for providing this open-source project for tooling authors like me to learn from and build!
 
-### __The Sett__ ([@the-sett](https://github.com/the-sett))
+### __Rupert Smith__ ([@the-sett](https://github.com/the-sett))
 
 When adding the __HTML to Elm__ feature, both the [the-sett/elm-pretty-printer](https://github.com/the-sett/elm-pretty-printer) and [the-sett/elm-syntax-dsl](https://github.com/the-sett/elm-syntax-dsl) allowed me to turn an Elm AST into an `elm-format` compatible string.
 
