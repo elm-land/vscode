@@ -125,57 +125,81 @@ type ParsedReportError = {
 const Elm = {
   compile: (input: { elmJsonFile: ElmJsonFile, elmFilesToCompile: string[] }): Promise<ParsedError | undefined> => {
     let deduplicated = [...new Set(input.elmFilesToCompile)]
-    const command = `(cd ${input.elmJsonFile.projectFolder} && elm make ${deduplicated.join(' ')} --output=/dev/null --report=json)`
     const promise: Promise<ParsedError | undefined> =
-      new Promise((resolve) =>
-        child_process.exec(
-          command,
+      new Promise((resolve, reject) => {
+        const child = child_process.spawn(
+          'elm',
+          [
+            'make',
+            ...deduplicated,
+            '--output=/dev/null',
+            '--report=json'
+          ],
           {
+            cwd: input.elmJsonFile.projectFolder,
             env: sharedLogic.npxEnv()
-          },
-          async (err, _, stderr) => {
-          if (err) {
-            const ELM_BINARY_NOT_FOUND = 127
-            if (err.code === ELM_BINARY_NOT_FOUND || err.message.includes(`'elm' is not recognized`)) {
-              let response = await vscode.window.showInformationMessage(
-                'The "Error highlighting" feature requires "elm"',
-                { modal: false },
-                'Install'
-              )
-
-              if (response === 'Install') {
-                vscode.commands.executeCommand('elmLand.installElm')
-              }
-            } else {
-              try {
-                const json: ElmError = JSON.parse(stderr)
-
-                switch (json.type) {
-                  case 'compile-errors':
-                    let error1: ParsedCompileError = {
-                      kind: 'compile-errors',
-                      errors: json.errors
-                    }
-                    return resolve(error1)
-                  case 'error':
-                    let error2: ParsedReportError = {
-                      kind: 'error',
-                      title: json.title,
-                      path: json.path,
-                      message: json.message
-                    }
-                    return resolve(error2)
-                  default:
-                    throw new Error("Unhandled error type: " + ((json as any).type))
-                }
-              } catch (ex) {
-                resolve({ kind: 'unknown', raw: stderr })
-              }
-            }
-          } else {
-            resolve(undefined)
           }
-        }))
+        )
+
+        child.on('error', (err: Error & { code?: string }) => {
+          if (err.code === "ENOENT") {
+            vscode.window.showInformationMessage(
+              'The "Error highlighting" feature requires "elm"',
+              { modal: false },
+              'Install'
+            ).then(
+              response => {
+                if (response === 'Install') {
+                  vscode.commands.executeCommand('elmLand.installElm')
+                }
+                resolve(undefined)
+              },
+              reject
+            )
+          } else {
+            resolve({ kind: 'unknown', raw: err.message })
+          }
+        })
+
+        const stderrBuffers: Array<Buffer> = []
+
+        child.stderr.on('data', (chunk: Buffer) => {
+          stderrBuffers.push(chunk)
+        })
+
+        child.on('exit', (exitCode) => {
+          if (exitCode === 0) {
+            resolve(undefined)
+          } else {
+            const stderr = Buffer.concat(stderrBuffers).toString('utf-8')
+
+            try {
+              const json: ElmError = JSON.parse(stderr)
+
+              switch (json.type) {
+                case 'compile-errors':
+                  let error1: ParsedCompileError = {
+                    kind: 'compile-errors',
+                    errors: json.errors
+                  }
+                  return resolve(error1)
+                case 'error':
+                  let error2: ParsedReportError = {
+                    kind: 'error',
+                    title: json.title,
+                    path: json.path,
+                    message: json.message
+                  }
+                  return resolve(error2)
+                default:
+                  throw new Error("Unhandled error type: " + ((json as any).type))
+              }
+            } catch {
+              resolve({ kind: 'unknown', raw: stderr })
+            }
+          }
+        })
+      })
 
     return promise
   },
