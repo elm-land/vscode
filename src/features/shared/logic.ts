@@ -1,3 +1,4 @@
+import * as path from 'path'
 import * as vscode from 'vscode'
 import * as AutodetectElmJson from './autodetect-elm-json'
 import { ElmJsonFile, getDocumentationForElmPackage } from './elm-json-file'
@@ -99,6 +100,40 @@ const verifyFileExists = async (fsPath: string): Promise<string | undefined> => 
   }
 }
 
+// Some people install elm and elm-format locally instead of globally, using
+// npm or the elm-tooling CLI. To run locally installed tools, they use `npx`.
+//
+// `npx` adds all potential `node_modules/.bin` up the current directory to the
+// beginning of PATH, for example:
+//
+//     ❯ npx node -p 'process.env.PATH.split(path.delimiter)'
+//     [
+//       '/Users/you/stuff/node_modules/.bin',
+//       '/Users/you/node_modules/.bin',
+//       '/Users/node_modules/.bin',
+//       '/node_modules/.bin',
+//       '/usr/bin',
+//       'etc'
+//     ]
+//
+// This function also does that, so that local installations just work.
+function npxEnv() {
+  return {
+    ...process.env,
+    PATH: [
+      ...(vscode.workspace.workspaceFolders ?? [])
+        .flatMap(folder =>
+          folder.uri.fsPath.split(path.sep)
+            .map((_, index, parts) =>
+              [...parts.slice(0, index + 1), 'node_modules', '.bin'].join(path.sep)
+            )
+            .reverse()
+        ),
+      process.env.PATH
+    ].join(path.delimiter)
+  }
+}
+
 export default {
   pluginId: 'elmLand',
   findElmJsonFor,
@@ -107,5 +142,6 @@ export default {
   findFirstOccurenceOfWordInFile,
   isDefined,
   doesModuleExposesValue,
-  keepFilesThatExist
+  keepFilesThatExist,
+  npxEnv
 }
