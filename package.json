@@ -111,6 +111,12 @@
             "description": "Enable the 'HTML to Elm' feature",
             "type": "boolean",
             "default": true
+          },
+          "elmLand.feature.goToSymbol": {
+            "order": 7,
+            "description": "Enable the 'Go-to-symbol' feature",
+            "type": "boolean",
+            "default": true
           }
         }
       }

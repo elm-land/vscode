@@ -7,6 +7,7 @@ import * as JumpToDefinition from "./features/jump-to-definition"
 import * as OfflinePackageDocs from "./features/offline-package-docs"
 import * as TypeDrivenAutocomplete from './features/type-driven-autocomplete'
 import * as HtmlToElm from './features/html-to-elm'
+import * as GoToSymbol from "./features/go-to-symbol"
 
 export async function activate(context: vscode.ExtensionContext) {
   console.info("ACTIVATE")
@@ -32,6 +33,7 @@ export async function activate(context: vscode.ExtensionContext) {
   OfflinePackageDocs.feature({ globalState, context })
   TypeDrivenAutocomplete.feature({ globalState, context })
   HtmlToElm.feature({ globalState, context })
+  GoToSymbol.feature({ globalState, context })
 }
 
 export function deactivate() {
