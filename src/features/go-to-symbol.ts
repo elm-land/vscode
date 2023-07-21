@@ -3,7 +3,14 @@ import sharedLogic, { Feature } from './shared/logic'
 import * as ElmToAst from './shared/elm-to-ast'
 import * as ElmSyntax from './shared/elm-to-ast/elm-syntax'
 
+type Fallback = {
+  fsPath: string
+  symbols: vscode.DocumentSymbol[]
+}
+
 export const feature: Feature = ({ context }) => {
+  let fallback: Fallback | undefined = undefined
+
   context.subscriptions.push(
     vscode.languages.registerDocumentSymbolProvider('elm', {
       async provideDocumentSymbols(doc: vscode.TextDocument, token: vscode.CancellationToken) {
@@ -17,8 +24,21 @@ export const feature: Feature = ({ context }) => {
 
         if (ast) {
           const symbols = ast.declarations.map(declarationToDocumentSymbol)
+          fallback = {
+            fsPath: doc.uri.fsPath,
+            symbols,
+          }
           console.info('provideDocumentSymbol', `${Date.now() - start}ms`)
           return symbols
+        } else if (fallback !== undefined && doc.uri.fsPath === fallback.fsPath) {
+          // When you start editing code, it won’t have correct syntax straight away,
+          // but VSCode will re-run this. If you have the Outline panel in the sidebar,
+          // it’s quite distracting if we return an empty list here – the list will flash
+          // between “no symbols” and all the symbols. So returning the symbols from last
+          // time we got any improves the UX a little. Note: If you remove all text in the,
+          // the Outline view will show old stuff that isn’t available until the file becomes
+          // syntactically valid again – but I think it’s fine.
+          return fallback.symbols
         }
       }
   })
