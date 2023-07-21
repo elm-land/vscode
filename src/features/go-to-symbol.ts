@@ -242,6 +242,7 @@ const typeAliasSymbolKind = (typeAnnotation: ElmSyntax.TypeAnnotation): vscode.S
     case 'typed': return vscode.SymbolKind.Variable
     case 'unit': return vscode.SymbolKind.Variable
     case 'tupled': return vscode.SymbolKind.Variable
+    // `vscode.SymbolKind.Object` gives a nice icon looking like this: {}
     case 'record': return vscode.SymbolKind.Object
     case 'genericRecord': return vscode.SymbolKind.Object
   }
