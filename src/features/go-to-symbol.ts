@@ -2,86 +2,227 @@ import * as vscode from 'vscode'
 import sharedLogic, { Feature } from './shared/logic'
 import * as ElmToAst from './shared/elm-to-ast'
 import * as ElmSyntax from './shared/elm-to-ast/elm-syntax'
-import { GlobalState } from './shared/autodetect-elm-json'
-import { ElmJsonFile } from './shared/elm-json-file'
 
-export const feature: Feature = ({ globalState, context }) => {
+export const feature: Feature = ({ context }) => {
   context.subscriptions.push(
-    vscode.languages.registerDocumentSymbolProvider('elm', provider(globalState))
+    vscode.languages.registerDocumentSymbolProvider('elm', {
+      async provideDocumentSymbols(doc: vscode.TextDocument, token: vscode.CancellationToken) {
+        // Allow user to disable this feature
+        const isEnabled: boolean = vscode.workspace.getConfiguration('elmLand').feature.goToSymbol
+        if (!isEnabled) return
+
+        const start = Date.now()
+        const text = doc.getText()
+        const ast = await ElmToAst.run(text)
+
+        if (ast) {
+          const symbols = ast.declarations.map(declarationToDocumentSymbol)
+          console.info('provideDocumentSymbol', `${Date.now() - start}ms`)
+          return symbols
+        }
+      }
+  })
   )
 }
 
-// TODO: Inline and remove globalState?
-const provider = (globalState: GlobalState) => {
-  return {
-    // TODO: vscode.ProviderResult<vscode.DocumentSymbol[] | vscode.SymbolInformation[]>
-    async provideDocumentSymbols(doc: vscode.TextDocument, token: vscode.CancellationToken) {
-      // Allow user to disable this feature
-      const isEnabled: boolean = vscode.workspace.getConfiguration('elmLand').feature.goToSymbol
-      if (!isEnabled) return
+const declarationToDocumentSymbol = (declaration: ElmSyntax.Node<ElmSyntax.Declaration>): vscode.DocumentSymbol => {
+  const symbol = (
+    name: ElmSyntax.Node<string>,
+    symbolKind: vscode.SymbolKind,
+    fullRange: ElmSyntax.Range = declaration.range
+  ) => new vscode.DocumentSymbol(
+    name.value,
+    '',
+    symbolKind,
+    sharedLogic.fromElmRange(fullRange),
+    sharedLogic.fromElmRange(name.range)
+  )
 
-      const start = Date.now()
-      const text = doc.getText()
-      const ast = await ElmToAst.run(text)
+  const symbolWithChildren = (
+    name: ElmSyntax.Node<string>,
+    symbolKind: vscode.SymbolKind,
+    children: vscode.DocumentSymbol[]
+  ) => {
+    const documentSymbol = new vscode.DocumentSymbol(
+      name.value,
+      '',
+      symbolKind,
+      sharedLogic.fromElmRange(declaration.range),
+      sharedLogic.fromElmRange(name.range)
+    )
+    documentSymbol.children = children
+    return documentSymbol
+  }
 
-      if (ast) {
-        const symbols = ast.declarations.map(declaration => {
-          const a = new vscode.DocumentSymbol(
-            /**
-             * The name of this symbol.
-             */
-            "Namn",
+  switch (declaration.value.type) {
+    case 'function':
+      return symbolWithChildren(
+        declaration.value.function.declaration.value.name,
+        vscode.SymbolKind.Function,
+        expressionToDocumentSymbols(declaration.value.function.declaration.value.expression.value)
+      )
 
-            /**
-             * More detail for this symbol, e.g. the signature of a function.
-             */
-            // TODO: Provide the signature?
-            "(detail)",
+    case 'destructuring':
+      return symbolWithChildren(
+        {
+          value: patternToString(declaration.value.destructuring.pattern.value),
+          range: declaration.value.destructuring.pattern.range
+        },
+        vscode.SymbolKind.Function,
+        expressionToDocumentSymbols(declaration.value.destructuring.expression.value)
+      )
 
-            /**
-             * The kind of this symbol.
-             */
-            // TODO: Depends on what kind of declaration.
-            vscode.SymbolKind.Function,
+    case 'typeAlias':
+      return symbol(
+        declaration.value.typeAlias.name,
+        typeAliasSymbolKind(declaration.value.typeAlias.typeAnnotation.value)
+      )
 
-            /**
-             * Tags for this symbol.
-             */
-            // TODO: Can look for @deprecated and mark as deprecated?
-            // tags?: readonly SymbolTag[],
-
-            /**
-             * The range enclosing this symbol not including leading/trailing whitespace but everything else, e.g. comments and code.
-             */
-            sharedLogic.fromElmRange(declaration.range),
-
-            /**
-             * The range that should be selected and reveal when this symbol is being picked, e.g. the name of a function.
-             * Must be contained by the {@linkcode DocumentSymbol.range range}.
-             */
-            // TODO: Closer range
-            sharedLogic.fromElmRange(declaration.range),
-
-            /**
-             * Children of this symbol, e.g. properties of a class.
-             */
-            // TODO: let bindings?
-            // and how to add them? mutate it afterwards?
-            // yep
-            // [],
-
+    case 'typedecl':
+      return symbolWithChildren(
+        declaration.value.typedecl.name,
+        vscode.SymbolKind.Enum,
+        declaration.value.typedecl.constructors.map(constructor =>
+          symbol(
+            constructor.value.name,
+            vscode.SymbolKind.EnumMember,
+            constructor.range
           )
-          a.children = [
-            new vscode.DocumentSymbol("child", "", vscode.SymbolKind.Constant, sharedLogic.fromElmRange(declaration.range), sharedLogic.fromElmRange(declaration.range))
-          ]
-          // Seems to just be a less advanced variant?
-          // const b: vscode.SymbolInformation = x
-          return a
-        })
+        )
+      )
 
-        console.info('provideDocumentSymbol', `${Date.now() - start}ms`)
-        return symbols
-      }
-    }
+    case 'port':
+      return symbol(
+        declaration.value.port.name,
+        vscode.SymbolKind.Function
+      )
+
+    case 'infix':
+      return symbol(
+        declaration.value.infix.operator,
+        vscode.SymbolKind.Operator
+      )
+  }
+}
+
+const expressionToDocumentSymbols = (expression: ElmSyntax.Expression): vscode.DocumentSymbol[] => {
+  switch (expression.type) {
+    case 'unit':
+      return []
+
+    case 'application':
+      return expression.application.flatMap(node => expressionToDocumentSymbols(node.value))
+
+    case 'operatorapplication':
+      return [
+        ...expressionToDocumentSymbols(expression.operatorapplication.left.value),
+        ...expressionToDocumentSymbols(expression.operatorapplication.right.value),
+      ]
+
+    case 'functionOrValue':
+      return []
+
+    case 'ifBlock':
+      return [
+        ...expressionToDocumentSymbols(expression.ifBlock.clause.value),
+        ...expressionToDocumentSymbols(expression.ifBlock.then.value),
+        ...expressionToDocumentSymbols(expression.ifBlock.else.value),
+      ]
+
+    case 'prefixoperator':
+      return []
+
+    case 'operator':
+      return []
+
+    case 'hex':
+      return []
+
+    case 'integer':
+      return []
+
+    case 'float':
+      return []
+
+    case 'negation':
+      return expressionToDocumentSymbols(expression.negation.value)
+
+    case 'literal':
+      return []
+
+    case 'charLiteral':
+      return []
+
+    case 'tupled':
+      return expression.tupled.flatMap(node => expressionToDocumentSymbols(node.value))
+
+    case 'list':
+      return expression.list.flatMap(node => expressionToDocumentSymbols(node.value))
+
+    case 'parenthesized':
+      return expressionToDocumentSymbols(expression.parenthesized.value)
+
+    case 'let':
+      return [
+        ...expression.let.declarations.map(declarationToDocumentSymbol),
+        ...expressionToDocumentSymbols(expression.let.expression.value),
+      ]
+
+    case 'case':
+      return [
+        ...expressionToDocumentSymbols(expression.case.expression.value),
+        ...expression.case.cases.flatMap(node => expressionToDocumentSymbols(node.expression.value)),
+      ]
+
+    case 'lambda':
+      return expressionToDocumentSymbols(expression.lambda.expression.value)
+
+    case 'recordAccess':
+      return expressionToDocumentSymbols(expression.recordAccess.expression.value)
+
+    case 'recordAccessFunction':
+      return []
+
+    case 'record':
+      return expression.record.flatMap(item => expressionToDocumentSymbols(item.value.expression.value))
+
+    case 'recordUpdate':
+      return expression.recordUpdate.updates.flatMap(item => expressionToDocumentSymbols(item.value.expression.value))
+
+    case 'glsl':
+      return []
+  }
+}
+
+const patternToString = (pattern: ElmSyntax.Pattern): string => {
+  switch (pattern.type) {
+    case 'string': return 'STRING' // should not happen
+    case 'all': return '_'
+    case 'unit': return '()'
+    case 'char': return 'CHAR' // should not happen
+    case 'hex': return 'HEX' // should not happen
+    case 'int': return 'INT' // should not happen
+    case 'float': return 'FLOAT' // should not happen
+    case 'tuple': return `( ${pattern.tuple.value.map(value => patternToString(value.value)).join(', ')} )`
+    case 'record': return `{ ${pattern.record.value.map(node => node.value).join(', ')} }`
+    case 'uncons': return 'UNCONS' // should not happen
+    case 'list': return 'LIST' // should not happen
+    case 'var': return pattern.var.value
+    case 'named': return pattern.named.patterns.map(node => patternToString(node.value)).join(' ')
+    case 'as': return pattern.as.name.value
+    case 'parentisized': return patternToString(pattern.parentisized.value.value)
+  }
+}
+
+const typeAliasSymbolKind = (typeAnnotation: ElmSyntax.TypeAnnotation): vscode.SymbolKind => {
+  switch (typeAnnotation.type) {
+    // Note: In VSCode, TypeScript `type Foo =` gets `vscode.SymbolKind.Variable`.
+    case 'function': return vscode.SymbolKind.Variable
+    case 'generic': return vscode.SymbolKind.Variable
+    case 'typed': return vscode.SymbolKind.Variable
+    case 'unit': return vscode.SymbolKind.Variable
+    case 'tupled': return vscode.SymbolKind.Variable
+    case 'record': return vscode.SymbolKind.Object
+    case 'genericRecord': return vscode.SymbolKind.Object
   }
 }
