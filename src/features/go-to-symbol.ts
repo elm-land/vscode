@@ -63,13 +63,7 @@ const declarationToDocumentSymbol = (declaration: ElmSyntax.Node<ElmSyntax.Decla
     symbolKind: vscode.SymbolKind,
     children: vscode.DocumentSymbol[]
   ) => {
-    const documentSymbol = new vscode.DocumentSymbol(
-      name.value,
-      '',
-      symbolKind,
-      sharedLogic.fromElmRange(declaration.range),
-      sharedLogic.fromElmRange(name.range)
-    )
+    const documentSymbol = symbol(name, symbolKind)
     documentSymbol.children = children
     return documentSymbol
   }
