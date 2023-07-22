@@ -32,11 +32,11 @@ export const feature: Feature = ({ context }) => {
           return symbols
         } else if (fallback !== undefined && doc.uri.fsPath === fallback.fsPath) {
           // When you start editing code, it won’t have correct syntax straight away,
-          // but VSCode will re-run this. If you have the Outline panel in the sidebar,
-          // it’s quite distracting if we return an empty list here – the list will flash
+          // but VSCode will re-run this. If you have the Outline panel open in the sidebar,
+          // it’s quite distracting if we return an empty list here – it will flash
           // between “no symbols” and all the symbols. So returning the symbols from last
-          // time we got any improves the UX a little. Note: If you remove all text in the,
-          // the Outline view will show old stuff that isn’t available until the file becomes
+          // time we got any improves the UX a little. Note: If you remove all text in the file,
+          // the Outline view shows old stuff that isn’t available – until the file becomes
           // syntactically valid again – but I think it’s fine.
           return fallback.symbols
         }
