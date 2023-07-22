@@ -21,8 +21,7 @@ export const feature: Feature = ({ globalState, context }) => {
           let range = new vscode.Range(line.range.start, position)
           let textBeforeCursor = document.getText(range)
 
-          let regex = /((?:[A-Z][_A-Za-z]+\.)+)$/
-          let match = textBeforeCursor.match(regex)
+          let match = textBeforeCursor.match(autocompleteRegex)
 
           if (match) {
             let packages = new Map<ModuleName, vscode.CompletionItem[]>()
@@ -221,19 +220,20 @@ const toModuleDoc = (ast: ElmSyntax.Ast): ModuleDoc => {
 // COMPLETION ITEMS
 
 const toCompletionItems = (moduleDoc: ModuleDoc, allModuleNames: string[], packageUserAndName?: string): vscode.CompletionItem[] => {
-  let subModules = Object.keys(
-    allModuleNames
-      .filter(name => name.startsWith(moduleDoc.name))
-      .reduce((obj: Record<string, boolean>, name: string) => {
-        let partAfterThisModule = name.slice(moduleDoc.name.length + 1).split('.')
-        if (partAfterThisModule[0]) {
-          obj[partAfterThisModule[0]] = true
-        }
-        return obj
-      }, {})
-  )
+  const modulePrefix = `${moduleDoc.name}.`
+  const subModules = new Set<string>()
+
+  for (const moduleName of allModuleNames) {
+    if (moduleName.startsWith(modulePrefix)) {
+      const partAfterThisModule = moduleName.slice(modulePrefix.length).split('.')[0]
+      if (partAfterThisModule !== undefined) {
+        subModules.add(partAfterThisModule)
+      }
+    }
+  }
+
   return [
-    ...subModules.map(toNamespaceCompletionItem(packageUserAndName)),
+    ...Array.from(subModules, toNamespaceCompletionItem(packageUserAndName)),
     ...moduleDoc.aliases.map(toAliasCompletionItem(packageUserAndName)),
     ...moduleDoc.unions.flatMap(toUnionCompletionItems(packageUserAndName)),
     ...moduleDoc.values.map(toValueCompletionItem(packageUserAndName)),
@@ -305,13 +305,23 @@ const toValueCompletionItem = (packageUserAndName?: string) => (value: Value): v
 const simplifyAnnotation = (type: string): string => {
   if (!type) return ''
 
-  let simplifiedAnnotation =
-    type.replace(/(\b[A-Za-z]+\.)+/g, "")
+  const simplifiedAnnotation =
+    type.replace(moduleQualifierRegex, "")
 
   return ` : ${simplifiedAnnotation}`
 }
 
 type ModuleName = string
+
+// Parts for these regexes are taken from here: https://github.com/rtfeldman/node-test-runner/blob/eedf853fc9b45afd73a0db72decebdb856a69771/lib/Parser.js#L234
+//
+// Regular expression to match import statements.
+// Note: This might match inside multiline comments and multiline strings.
+const importRegex = /^import\s+(\p{Lu}[_\d\p{L}]*(?:\.\p{Lu}[_\d\p{L}]*)*)(?:\s+as\s+(\p{Lu}[_\d\p{L}]*))?/gmu
+// Regular expression to match the `Module.Name.` part of `Module.Name.function`.
+const moduleQualifierRegex = /(\b\p{Lu}[_\d\p{L}]*\.)+/gu
+// Regular expression to match `Module.Name.` before the cursor, for triggering autocomplete.
+const autocompleteRegex = /(?:\p{Lu}[_\d\p{L}]*\.)+$/u
 
 // 
 // This scans the file with a regex, so we can still provide
@@ -327,14 +337,9 @@ const getAliasesForCurrentFile = (document: vscode.TextDocument): Map<string, Mo
     ['Sub', ['Platform.Sub']],
   ])
 
-  // Regular expression to match import statements
-  let importRegex = /import\s([\w\.]+)(\sas\s(\w+))?/g
-
-  let match;
-  while ((match = importRegex.exec(code)) !== null) {
-    let moduleName = match[1]
-    let aliasName = match[3]
-    if (moduleName && aliasName) {
+  for (const match of code.matchAll(importRegex)) {
+    const [, moduleName, aliasName] = match
+    if (moduleName !== undefined && aliasName !== undefined) {
       const previous = alias.get(aliasName)
       if (previous === undefined) {
         alias.set(aliasName, [moduleName])
