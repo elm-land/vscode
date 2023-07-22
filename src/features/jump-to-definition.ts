@@ -45,15 +45,13 @@ const provider = (globalState: GlobalState) => {
   }
 
   type HandleJumpToLinksForImportsInput = {
-    document: vscode.TextDocument
     position: vscode.Position
     ast: ElmSyntax.Ast
     elmJsonFile: ElmJsonFile
-    packages: Packages
   }
 
   const handleJumpToLinksForImports =
-    async ({ document, position, ast, elmJsonFile, packages }: HandleJumpToLinksForImportsInput)
+    async ({ position, ast, elmJsonFile }: HandleJumpToLinksForImportsInput)
       : Promise<vscode.Location | null> => {
 
       for (let import_ of ast.imports) {
@@ -128,10 +126,9 @@ const provider = (globalState: GlobalState) => {
     ast: ElmSyntax.Ast,
     doc: vscode.TextDocument
     elmJsonFile: ElmJsonFile
-    packages: Packages
   }
 
-  const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFile, packages }: HandleJumpToLinksForDeclarationsInput): Promise<vscode.Location | null> => {
+  const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFile }: HandleJumpToLinksForDeclarationsInput): Promise<vscode.Location | null> => {
     let {
       aliasMappingToModuleNames,
       explicitExposingValuesForImports,
@@ -989,15 +986,14 @@ const provider = (globalState: GlobalState) => {
           }
 
           // Handle module imports
-          let packages = await sharedLogic.getMappingOfModuleNameToDocJsonFilepath(globalState, elmJsonFile)
-          matchingLocation = await handleJumpToLinksForImports({ document: doc, position, ast, elmJsonFile, packages })
+          matchingLocation = await handleJumpToLinksForImports({ position, ast, elmJsonFile })
           if (matchingLocation) {
             console.info('provideDefinition', `${Date.now() - start}ms`)
             return matchingLocation
           }
 
           // Handle module declarations
-          matchingLocation = await handleJumpToLinksForDeclarations({ position, ast, doc, elmJsonFile, packages })
+          matchingLocation = await handleJumpToLinksForDeclarations({ position, ast, doc, elmJsonFile })
           if (matchingLocation) {
             console.info('provideDefinition', `${Date.now() - start}ms`)
             return matchingLocation

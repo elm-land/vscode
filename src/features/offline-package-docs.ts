@@ -37,8 +37,8 @@ export const feature: Feature = ({ globalState, context }) => {
           let moduleNameNode = importNode.value.moduleName
           let range = SharedLogic.fromElmRange(moduleNameNode.range)
           let moduleName = moduleNameNode.value.join(".")
-          let docsJsonFsPath = packages[moduleName]
-          if (docsJsonFsPath) {
+          let docsJsonFsPath = packages.get(moduleName)
+          if (docsJsonFsPath !== undefined) {
             details.push({
               range,
               docsJsonFsPath,
@@ -258,8 +258,8 @@ export const feature: Feature = ({ globalState, context }) => {
                     )
 
                 for (let moduleName of moduleNames) {
-                  let docsJsonFsPath = packages[moduleName]
-                  if (docsJsonFsPath) {
+                  let docsJsonFsPath = packages.get(moduleName)
+                  if (docsJsonFsPath !== undefined) {
                     let typeOrValueName = await SharedLogic.doesModuleExposesValue(
                       globalState,
                       foo,
@@ -343,8 +343,8 @@ export const feature: Feature = ({ globalState, context }) => {
                     )
 
                 for (let moduleName of moduleNames) {
-                  let docsJsonFsPath = packages[moduleName]
-                  if (docsJsonFsPath) {
+                  let docsJsonFsPath = packages.get(moduleName)
+                  if (docsJsonFsPath !== undefined) {
                     let typeOrValueName = await SharedLogic.doesModuleExposesValue(
                       globalState,
                       foo,

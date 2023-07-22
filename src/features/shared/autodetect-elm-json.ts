@@ -7,7 +7,7 @@ import sharedLogic from './logic'
 export type GlobalState = {
   isFirstTimeRunningPlugin: boolean
   elmJsonFiles: ElmJsonFile[]
-  cachedDocs: Record<string, ModuleDoc[]>
+  cachedDocs: Map<string, ModuleDoc[]>
   jumpToDocDetails: JumpToDocDetails[] | undefined
 }
 
@@ -51,7 +51,7 @@ export const run = async (globalState: GlobalState) => {
   let elmJsonFileUris = await vscode.workspace.findFiles('**/elm.json', '**/node_modules/**', 10)
   let possibleElmJsonFiles = await Promise.all(toElmJsonFiles({ elmJsonFileUris, settings }))
   globalState.elmJsonFiles = possibleElmJsonFiles.filter(sharedLogic.isDefined)
-  globalState.cachedDocs = {}
+  globalState.cachedDocs = new Map()
   console.info(`autodetectElmJson`, `${Date.now() - start}ms`)
 }
 

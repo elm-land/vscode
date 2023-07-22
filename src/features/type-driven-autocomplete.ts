@@ -25,18 +25,18 @@ export const feature: Feature = ({ globalState, context }) => {
           let match = textBeforeCursor.match(regex)
 
           if (match) {
-            let packages: Record<ModuleName, vscode.CompletionItem[]> = {}
+            let packages = new Map<ModuleName, vscode.CompletionItem[]>()
             let moduleNameTheUserTyped = match[0].slice(0, -1)
 
             let aliasMap = getAliasesForCurrentFile(document)
             for (let [alias, moduleNames] of Object.entries(aliasMap)) {
               for (let moduleName of moduleNames) {
-                packages[alias] = packages[moduleName] || []
+                packages.set(alias, packages.get(moduleName) ?? [])
               }
             }
 
-            let matchingAliasedModules = aliasMap[moduleNameTheUserTyped]
-            let moduleName = matchingAliasedModules && matchingAliasedModules[0] || moduleNameTheUserTyped
+            let matchingAliasedModules = aliasMap.get(moduleNameTheUserTyped)
+            let moduleName = matchingAliasedModules?.[0] ?? moduleNameTheUserTyped
 
             let elmStuffFolder = path.join(elmJson.projectFolder, 'elm-stuff', '0.19.1')
             let elmiFilepaths = await vscode.workspace.fs.readDirectory(vscode.Uri.file(elmStuffFolder))
@@ -66,16 +66,16 @@ export const feature: Feature = ({ globalState, context }) => {
             }
 
             for (let [moduleDoc, dependency] of packageModuleDocs) {
-              packages[moduleDoc.name] = toCompletionItems(
+              packages.set(moduleDoc.name, toCompletionItems(
                 moduleDoc,
                 allModuleNames,
                 dependency.packageUserAndName
-              )
+              ))
             }
 
-            let value = packages[moduleName]
+            let value = packages.get(moduleName)
 
-            if (value) {
+            if (value !== undefined) {
               console.info(`autocomplete`, `${Date.now() - start}ms`)
               return value
             }
@@ -317,15 +317,15 @@ type ModuleName = string
 // This scans the file with a regex, so we can still provide
 // a good autocomplete experience, even for incomplete Elm files.
 // 
-const getAliasesForCurrentFile = (document: vscode.TextDocument): Record<string, ModuleName[]> => {
+const getAliasesForCurrentFile = (document: vscode.TextDocument): Map<string, ModuleName[]> => {
   let code = document.getText()
 
   // Start with the two aliases implicitly included
   // in every Elm file:
-  let alias: Record<string, string[]> = {
-    Cmd: ['Platform.Cmd'],
-    Sub: ['Platform.Sub'],
-  }
+  let alias = new Map<string, string[]>([
+    ['Cmd', ['Platform.Cmd']],
+    ['Sub', ['Platform.Sub']],
+  ])
 
   // Regular expression to match import statements
   let importRegex = /import\s([\w\.]+)(\sas\s(\w+))?/g
@@ -335,8 +335,12 @@ const getAliasesForCurrentFile = (document: vscode.TextDocument): Record<string,
     let moduleName = match[1]
     let aliasName = match[3]
     if (moduleName && aliasName) {
-      alias[aliasName] = alias[aliasName] || []
-      alias[aliasName]?.push(moduleName)
+      const previous = alias.get(aliasName)
+      if (previous === undefined) {
+        alias.set(aliasName, [moduleName])
+      } else {
+        previous.push(moduleName)
+      }
     }
   }
   return alias

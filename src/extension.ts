@@ -15,7 +15,7 @@ export async function activate(context: vscode.ExtensionContext) {
   let globalState: GlobalState = {
     isFirstTimeRunningPlugin: true,
     elmJsonFiles: [],
-    cachedDocs: {},
+    cachedDocs: new Map(),
     jumpToDocDetails: undefined
   }
   context.subscriptions.push({
