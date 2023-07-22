@@ -1,32 +1,64 @@
+import * as path from 'path'
+import * as WorkerThreads from 'worker_threads'
 import * as ElmSyntax from './elm-syntax'
-const Elm: CompiledElmFile = require('./worker.min.js').Elm
 
-type CompiledElmFile = {
-  Worker: {
-    init: () => ElmApp
-  }
-}
+type WorkerState =
+  | { tag: 'NotRunning' }
+  | { tag: 'Idle', worker: WorkerThreads.Worker }
+  | { tag: 'Busy', worker: WorkerThreads.Worker }
 
-type ElmApp = {
-  ports: {
-    input: { send: (rawElmSource: string) => void }
-    onSuccess: { subscribe: (fn: (ast: ElmSyntax.Ast) => void) => void }
-    onFailure: { subscribe: (fn: (reason: string) => void) => void }
-  }
-}
+let workerState: WorkerState = { tag: 'NotRunning' }
 
-let queue: Array<(result: ElmSyntax.Ast | undefined) => void> = []
-const app = Elm.Worker.init()
-app.ports.onSuccess.subscribe((ast) => {
-  queue.shift()?.(ast)
-})
-app.ports.onFailure.subscribe((reason) => {
-  queue.shift()?.(undefined)
-})
-
+// TODO: Can bring in cancel token as well and kill it then
 export const run = async (rawElmSource: string): Promise<ElmSyntax.Ast | undefined> => {
   return new Promise((resolve) => {
-    queue.push(resolve)
-    app.ports.input.send(rawElmSource)
+    const worker = getWorker(resolve)
+    workerState = { tag: 'Busy', worker }
+    worker.postMessage(rawElmSource)
   })
+}
+
+const getWorker = (resolve: (result: ElmSyntax.Ast | undefined) => void): WorkerThreads.Worker => {
+  console.info('STATE', workerState.tag)
+  switch (workerState.tag) {
+    case 'NotRunning':
+      return initWorker(resolve)
+
+    case 'Idle':
+      return workerState.worker
+
+    case 'Busy':
+      workerState.worker.terminate()
+      return initWorker(resolve)
+  }
+}
+
+const initWorker = (resolve: (result: ElmSyntax.Ast | undefined) => void): WorkerThreads.Worker => {
+  const worker = new WorkerThreads.Worker(path.join(__dirname, './worker.js'))
+
+  worker.on('error', (error) => {
+    console.error(`ElmToAst`, `Worker error:`, error)
+    worker.terminate()
+    workerState = { tag: 'NotRunning' }
+    resolve(undefined)
+  })
+
+  worker.on('messageerror', (error) => {
+    console.error(`ElmToAst`, `Worker messageerror:`, error)
+    worker.terminate()
+    workerState = { tag: 'NotRunning' }
+    resolve(undefined)
+  })
+
+  worker.on('exit', () => {
+    // Most likely, we terminated a busy worker, so there is no error to report.
+    resolve(undefined)
+  })
+
+  worker.on('message', (result) => {
+    workerState = { tag: 'Idle', worker }
+    resolve(result)
+  })
+
+  return worker
 }
