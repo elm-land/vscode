@@ -117,6 +117,12 @@
             "description": "Enable the 'Go-to-symbol' feature",
             "type": "boolean",
             "default": true
+          },
+          "elmLand.feature.openSymbolByName": {
+            "order": 8,
+            "description": "Enable the 'Open symbol by name' feature",
+            "type": "boolean",
+            "default": true
           }
         }
       }
