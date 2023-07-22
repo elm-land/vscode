@@ -33,14 +33,13 @@ export const feature: Feature = ({ context }) => {
         const text = doc.getText()
         const ast = await ElmToAst.run(text, token)
 
+        let symbols: vscode.DocumentSymbol[] = []
         if (ast) {
-          const symbols = ast.declarations.map(declarationToDocumentSymbol)
+          symbols = ast.declarations.map(declarationToDocumentSymbol)
           fallback = {
             fsPath: doc.uri.fsPath,
             symbols,
           }
-          console.info('provideDocumentSymbol', `${Date.now() - start}ms`)
-          return symbols
         } else if (fallback !== undefined && doc.uri.fsPath === fallback.fsPath) {
           // When you start editing code, it won’t have correct syntax straight away,
           // but VSCode will re-run this. If you have the Outline panel open in the sidebar,
@@ -49,8 +48,11 @@ export const feature: Feature = ({ context }) => {
           // time we got any improves the UX a little. Note: If you remove all text in the file,
           // the Outline view shows old stuff that isn’t available – until the file becomes
           // syntactically valid again – but I think it’s fine.
-          return fallback.symbols
+          symbols = fallback.symbols
         }
+        
+        console.info('provideDocumentSymbol', `${symbols.length} results in ${Date.now() - start}ms`)
+        return symbols
       }
     })
   )
@@ -63,7 +65,7 @@ export const feature: Feature = ({ context }) => {
         if (!isEnabled) return
 
         const start = Date.now()
-        const results = []
+        const symbols: vscode.SymbolInformation[] = []
         const uris = await vscode.workspace.findFiles('**/*.elm', '**/{node_modules,elm-stuff}/**')
 
         for (const uri of uris) {
@@ -77,10 +79,10 @@ export const feature: Feature = ({ context }) => {
             if (name === '\n') {
               line++
               lineIndex = matchIndex
-            } else {
+            } else if (nameMatchesQuery(name, query)) {
               const firstLetter = name.slice(0, 1)
               const character = matchIndex - lineIndex - 1
-              results.push(
+              symbols.push(
                 new vscode.SymbolInformation(
                   name,
                   firstLetter.toUpperCase() === firstLetter ? vscode.SymbolKind.Variable : vscode.SymbolKind.Function,
@@ -98,11 +100,25 @@ export const feature: Feature = ({ context }) => {
           }
         }
 
-        console.info('provideWorkspaceSymbol', `${Date.now() - start}ms`)
-        return results
+        console.info('provideWorkspaceSymbol', `${symbols.length} results in ${Date.now() - start}ms`)
+        return symbols
       }
     })
   )
+}
+
+// Checks that the characters of `query` appear in their order in a candidate symbol,
+// as documented here: https://code.visualstudio.com/api/references/vscode-api#WorkspaceSymbolProvider
+const nameMatchesQuery = (name: string, query: string): boolean => {
+  const nameChars = Array.from(name)
+  let nameIndex = 0
+  outer: for (const char of query) {
+    for (; nameIndex < nameChars.length; nameIndex++) {
+      if (nameChars[nameIndex] === char) continue outer
+    }
+    return false
+  }
+  return true
 }
 
 const declarationToDocumentSymbol = (declaration: ElmSyntax.Node<ElmSyntax.Declaration>): vscode.DocumentSymbol => {
