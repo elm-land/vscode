@@ -68,6 +68,7 @@ export const feature: Feature = ({ context }) => {
 
         for (const uri of uris) {
           const buffer = await vscode.workspace.fs.readFile(uri)
+          if (token.isCancellationRequested) return
           const fileContents = Buffer.from(buffer).toString('utf8')
           let line = 0
           let lineIndex = 0
