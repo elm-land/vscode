@@ -1,36 +1,32 @@
 import * as ElmSyntax from './elm-syntax'
+const Elm: CompiledElmFile = require('./worker.min.js').Elm
 
 type CompiledElmFile = {
   Worker: {
-    init: (args: { flags: string }) => ElmApp
+    init: () => ElmApp
   }
 }
 
 type ElmApp = {
   ports: {
+    input: { send: (rawElmSource: string) => void }
     onSuccess: { subscribe: (fn: (ast: ElmSyntax.Ast) => void) => void }
     onFailure: { subscribe: (fn: (reason: string) => void) => void }
   }
 }
 
-export const run = async (rawElmSource: string): Promise<ElmSyntax.Ast | undefined> => {
-  // Attempt to load the compiled Elm worker
-  try {
-    // @ts-ignore
-    let Elm: CompiledElmFile = require('./worker.min.js').Elm
-    return new Promise((resolve) => {
-      // Start the Elm worker, and subscribe to 
-      const app = Elm.Worker.init({
-        flags: rawElmSource || ''
-      })
+let queue: Array<(result: ElmSyntax.Ast | undefined) => void> = []
+const app = Elm.Worker.init()
+app.ports.onSuccess.subscribe((ast) => {
+  queue.shift()?.(ast)
+})
+app.ports.onFailure.subscribe((reason) => {
+  queue.shift()?.(undefined)
+})
 
-      app.ports.onSuccess.subscribe(resolve)
-      app.ports.onFailure.subscribe((reason) => {
-        resolve(undefined)
-      })
-    })
-  } catch (_) {
-    console.error(`ElmToAst`, `Missing "worker.min.js"? Please follow the README section titled "Building from scratch"`)
-    return undefined
-  }
+export const run = async (rawElmSource: string): Promise<ElmSyntax.Ast | undefined> => {
+  return new Promise((resolve) => {
+    queue.push(resolve)
+    app.ports.input.send(rawElmSource)
+  })
 }
