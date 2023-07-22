@@ -41,7 +41,7 @@ export const feature: Feature = ({ context }) => {
           return fallback.symbols
         }
       }
-  })
+    })
   )
 }
 
