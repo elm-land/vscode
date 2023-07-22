@@ -139,7 +139,7 @@ const provider = (globalState: GlobalState) => {
     } = ElmSyntax.getInitialPreludeMappings()
 
     const findImportedModuleNamesThatMightHaveExposedThisValue = (moduleName: string): string[] => {
-      let explicitMatches = explicitExposingValuesForImports[moduleName] || []
+      let explicitMatches = explicitExposingValuesForImports.get(moduleName) ?? []
       return explicitMatches.concat(hasUnknownImportsFromExposingAll)
     }
 
@@ -315,7 +315,7 @@ const provider = (globalState: GlobalState) => {
           // would return "Html.Attributes"
           let parentModuleName = parentModules.join('.')
 
-          let aliases = aliasMappingToModuleNames[parentModuleName] || []
+          let aliases = aliasMappingToModuleNames.get(parentModuleName) ?? []
           let moduleNamesToCheck = [parentModuleName].concat(aliases)
 
           // Check local project files
@@ -859,8 +859,12 @@ const provider = (globalState: GlobalState) => {
       if (import_.value.moduleAlias) {
         let alias = import_.value.moduleAlias.value[0]
         if (alias !== undefined) {
-          aliasMappingToModuleNames[alias] = aliasMappingToModuleNames[alias] || [] as string[]
-          (aliasMappingToModuleNames[alias] as any).push(moduleName)
+          const previous = aliasMappingToModuleNames.get(alias)
+          if (previous === undefined) {
+            aliasMappingToModuleNames.set(alias, [moduleName])
+          } else {
+            previous.push(moduleName)
+          }
         }
       }
 
@@ -877,8 +881,12 @@ const provider = (globalState: GlobalState) => {
               .map(node => ElmSyntax.toTopLevelExposeName(node.value))
 
           for (let exportedName of namesOfExportedThings) {
-            explicitExposingValuesForImports[exportedName] = explicitExposingValuesForImports[exportedName] || [] as string[]
-            (explicitExposingValuesForImports[exportedName] as string[]).push(moduleName)
+            const previous = explicitExposingValuesForImports.get(exportedName)
+            if (previous === undefined) {
+              explicitExposingValuesForImports.set(exportedName, [moduleName])
+            } else {
+              previous.push(moduleName)
+            }
           }
 
           if (isExposingAnyCustomVariants) {

@@ -370,6 +370,9 @@ export type ModuleImportTracker = {
   findImportedModuleNamesForQualifiedValue: (moduleName: string) => string[]
 }
 
+const toMap = <V>(record: Record<string, V>): Map<string, V> =>
+  new Map(Object.entries(record))
+
 // Need to build up a collection of which types and values
 // are being exposed by all imports.
 // (This will be useful later when jumping to definitions)
@@ -393,12 +396,12 @@ type ImportAlias = string
 type ExposedValue = string
 type ModuleName = string
 type InitialPreludeData = {
-  explicitExposingValuesForImports: Record<ExposedValue, ModuleName[]>
+  explicitExposingValuesForImports: Map<ExposedValue, ModuleName[]>
   hasUnknownImportsFromExposingAll: ModuleName[]
-  aliasMappingToModuleNames: Record<ImportAlias, ModuleName[]>
+  aliasMappingToModuleNames: Map<ImportAlias, ModuleName[]>
 }
 export let getInitialPreludeMappings = (): InitialPreludeData => ({
-  explicitExposingValuesForImports: {
+  explicitExposingValuesForImports: toMap({
     'List': ['List'],
     '(::)': ['List'],
     'Maybe': ['Maybe'],
@@ -412,12 +415,12 @@ export let getInitialPreludeMappings = (): InitialPreludeData => ({
     'Program': ['Platform'],
     'Cmd': ['Platform.Cmd'],
     'Sub': ['Platform.Sub'],
-  },
+  }),
   hasUnknownImportsFromExposingAll: ['Basics'],
-  aliasMappingToModuleNames: {
+  aliasMappingToModuleNames: toMap({
     'Cmd': ['Platform.Cmd'],
     'Sub': ['Platform.Sub']
-  }
+  })
 })
 
 export const createModuleImportTracker = (ast: Ast): ModuleImportTracker => {
@@ -435,8 +438,12 @@ export const createModuleImportTracker = (ast: Ast): ModuleImportTracker => {
     if (import_.value.moduleAlias) {
       let alias = import_.value.moduleAlias.value[0]
       if (alias !== undefined) {
-        aliasMappingToModuleNames[alias] = aliasMappingToModuleNames[alias] || [] as string[]
-        (aliasMappingToModuleNames[alias] as any).push(moduleName)
+        const previous = aliasMappingToModuleNames.get(alias)
+        if (previous === undefined) {
+          aliasMappingToModuleNames.set(alias, [moduleName])
+        } else {
+          previous.push(moduleName)
+        }
       }
     }
 
@@ -452,8 +459,12 @@ export const createModuleImportTracker = (ast: Ast): ModuleImportTracker => {
             .map(node => toTopLevelExposeName(node.value))
 
         for (let exportedName of namesOfExportedThings) {
-          explicitExposingValuesForImports[exportedName] = explicitExposingValuesForImports[exportedName] || [] as string[]
-          (explicitExposingValuesForImports[exportedName] as string[]).push(moduleName)
+          const previous = explicitExposingValuesForImports.get(exportedName)
+          if (previous === undefined) {
+            explicitExposingValuesForImports.set(exportedName, [moduleName])
+          } else {
+            previous.push(moduleName)
+          }
         }
 
         if (isExposingAnyCustomVariants) {
@@ -467,11 +478,11 @@ export const createModuleImportTracker = (ast: Ast): ModuleImportTracker => {
 
   return {
     findImportedModuleNamesThatMightHaveExposedThisValue: (typeOrValueName: string): string[] => {
-      let explicitMatches = explicitExposingValuesForImports[typeOrValueName] || []
+      let explicitMatches = explicitExposingValuesForImports.get(typeOrValueName) ?? []
       return explicitMatches.concat(hasUnknownImportsFromExposingAll)
     },
     findImportedModuleNamesForQualifiedValue: (moduleName: string): string[] => {
-      let aliases = aliasMappingToModuleNames[moduleName] || []
+      let aliases = aliasMappingToModuleNames.get(moduleName) ?? []
       let moduleNamesToCheck = [moduleName].concat(aliases)
       return moduleNamesToCheck
     }
