@@ -88,8 +88,12 @@ export const feature: Feature = ({ globalState, context }) => {
                 return toCompletionItems(moduleDoc, allModuleNames)
               }
             }
-          }
 
+            // If you have typed `Json.` but there are no functions or types in that namespace,
+            // suggest `Decode` and `Encode` if appropriate.
+            console.info(`autocomplete`, `${Date.now() - start}ms`)
+            return moduleNameCompletions(moduleName, allModuleNames)
+          }
         }
 
         // return an empty array if the suggestions are not applicable
@@ -220,7 +224,16 @@ const toModuleDoc = (ast: ElmSyntax.Ast): ModuleDoc => {
 // COMPLETION ITEMS
 
 const toCompletionItems = (moduleDoc: ModuleDoc, allModuleNames: string[], packageUserAndName?: string): vscode.CompletionItem[] => {
-  const modulePrefix = `${moduleDoc.name}.`
+  return [
+    ...moduleNameCompletions(moduleDoc.name, allModuleNames, packageUserAndName),
+    ...moduleDoc.aliases.map(toAliasCompletionItem(packageUserAndName)),
+    ...moduleDoc.unions.flatMap(toUnionCompletionItems(packageUserAndName)),
+    ...moduleDoc.values.map(toValueCompletionItem(packageUserAndName)),
+  ]
+}
+
+const moduleNameCompletions = (moduleName: string, allModuleNames: string[], packageUserAndName?: string): vscode.CompletionItem[] => {
+  const modulePrefix = `${moduleName}.`
   const subModules = new Set<string>()
 
   for (const moduleName of allModuleNames) {
@@ -232,12 +245,7 @@ const toCompletionItems = (moduleDoc: ModuleDoc, allModuleNames: string[], packa
     }
   }
 
-  return [
-    ...Array.from(subModules, toNamespaceCompletionItem(packageUserAndName)),
-    ...moduleDoc.aliases.map(toAliasCompletionItem(packageUserAndName)),
-    ...moduleDoc.unions.flatMap(toUnionCompletionItems(packageUserAndName)),
-    ...moduleDoc.values.map(toValueCompletionItem(packageUserAndName)),
-  ]
+  return Array.from(subModules, toNamespaceCompletionItem(packageUserAndName))
 }
 
 const toNamespaceCompletionItem = (packageUserAndName?: string) => (moduleName: string): vscode.CompletionItem => ({
@@ -255,16 +263,6 @@ const toAliasCompletionItem = (packageUserAndName?: string) => (alias: Alias): v
   },
   kind: vscode.CompletionItemKind.Struct,
   documentation: new vscode.MarkdownString(alias.comment)
-})
-
-const toBinopCompletionItem = (packageUserAndName?: string) => (binop: BinOp): vscode.CompletionItem => ({
-  label: {
-    label: binop.name,
-    description: packageUserAndName,
-    detail: simplifyAnnotation(binop.type)
-  },
-  kind: vscode.CompletionItemKind.Operator,
-  documentation: new vscode.MarkdownString(binop.comment)
 })
 
 const toUnionCompletionItems = (packageUserAndName?: string) => (union: Union): vscode.CompletionItem[] => {
