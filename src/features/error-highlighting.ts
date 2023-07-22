@@ -127,17 +127,25 @@ const Elm = {
     let deduplicated = [...new Set(input.elmFilesToCompile)]
     const promise: Promise<ParsedError | undefined> =
       new Promise((resolve, reject) => {
+        const isWindows = process.platform === 'win32'
+        // This uses `spawn` so that we can support folders with spaces in them
+        // without having to think about escaping.
         const child = child_process.spawn(
           'elm',
           [
             'make',
-            ...deduplicated,
+            // `shell: true` is needed on Windows to execute shell scripts (non .exe files).
+            // When installing binaries with npm on Windows they are wrapped by a shell script.
+            // `shell: true` requires manual escaping. Luckily, paths on Windows cannot contain
+            // double quotes, so just adding double quotes around them should be enough and correct.
+            ...(isWindows ? deduplicated.map(file => `"${file}"`) : deduplicated),
             '--output=/dev/null',
             '--report=json'
           ],
           {
             cwd: input.elmJsonFile.projectFolder,
-            env: sharedLogic.npxEnv()
+            env: sharedLogic.npxEnv(),
+            shell: isWindows
           }
         )
 
