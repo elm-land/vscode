@@ -20,7 +20,7 @@ export const feature: Feature = ({ context }) => {
 
         const start = Date.now()
         const text = doc.getText()
-        const ast = await ElmToAst.run(text)
+        const ast = await ElmToAst.run(text, token)
 
         if (ast) {
           const symbols = ast.declarations.map(declarationToDocumentSymbol)

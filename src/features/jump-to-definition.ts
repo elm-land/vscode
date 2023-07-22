@@ -50,10 +50,11 @@ const provider = (globalState: GlobalState) => {
     ast: ElmSyntax.Ast
     elmJsonFile: ElmJsonFile
     packages: Packages
+    token: vscode.CancellationToken
   }
 
   const handleJumpToLinksForImports =
-    async ({ document, position, ast, elmJsonFile, packages }: HandleJumpToLinksForImportsInput)
+    async ({ document, position, ast, elmJsonFile, packages, token }: HandleJumpToLinksForImportsInput)
       : Promise<vscode.Location | null> => {
 
       for (let import_ of ast.imports) {
@@ -67,7 +68,7 @@ const provider = (globalState: GlobalState) => {
           let fileUri = await findLocalProjectFileUri(elmJsonFile, moduleName)
           if (fileUri) {
             let otherDocument = await vscode.workspace.openTextDocument(fileUri)
-            let otherAst = await ElmToAst.run(otherDocument.getText())
+            let otherAst = await ElmToAst.run(otherDocument.getText(), token)
             if (otherAst) {
               const otherModuleData: ElmSyntax.ModuleData = ElmSyntax.toModuleData(otherAst)
               return new vscode.Location(
@@ -94,7 +95,7 @@ const provider = (globalState: GlobalState) => {
               if (fileUri) {
 
                 let otherDocument = await vscode.workspace.openTextDocument(fileUri)
-                let otherAst = await ElmToAst.run(otherDocument.getText())
+                let otherAst = await ElmToAst.run(otherDocument.getText(), token)
 
                 if (otherAst) {
                   const topOfFileRange = ElmSyntax.toModuleData(otherAst).moduleName.range
@@ -129,9 +130,10 @@ const provider = (globalState: GlobalState) => {
     doc: vscode.TextDocument
     elmJsonFile: ElmJsonFile
     packages: Packages
+    token: vscode.CancellationToken
   }
 
-  const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFile, packages }: HandleJumpToLinksForDeclarationsInput): Promise<vscode.Location | null> => {
+  const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFile, packages, token }: HandleJumpToLinksForDeclarationsInput): Promise<vscode.Location | null> => {
     let {
       aliasMappingToModuleNames,
       explicitExposingValuesForImports,
@@ -146,17 +148,18 @@ const provider = (globalState: GlobalState) => {
     type FindLocationOfItemFromImportedFilesInput<item> = {
       findItemWithName: (ast: ElmSyntax.Ast, moduleName: string) => ElmSyntax.Node<item> | undefined
       isItemExposedFromModule: (ast: ElmSyntax.Ast, moduleName: string) => boolean
+      token: vscode.CancellationToken
     }
 
     const findLocationOfItemFromImportedFiles =
-      <item>({ findItemWithName, isItemExposedFromModule }: FindLocationOfItemFromImportedFilesInput<item>) =>
+      <item>({ findItemWithName, isItemExposedFromModule, token }: FindLocationOfItemFromImportedFilesInput<item>) =>
         async (importModuleNames: string[], moduleName: string) => {
           for (let importedModuleName of importModuleNames) {
             let importedModuleNameUri = await findLocalProjectFileUri(elmJsonFile, importedModuleName)
 
             if (importedModuleNameUri) {
               let importedDoc = await vscode.workspace.openTextDocument(importedModuleNameUri)
-              let importedAst = await ElmToAst.run(importedDoc.getText())
+              let importedAst = await ElmToAst.run(importedDoc.getText(), token)
 
               if (importedAst) {
                 let item = findItemWithName(importedAst, moduleName)
@@ -274,12 +277,14 @@ const provider = (globalState: GlobalState) => {
 
     const findLocationOfDeclarationFromImportedFiles = findLocationOfItemFromImportedFiles({
       findItemWithName: ElmSyntax.findDeclarationWithName,
-      isItemExposedFromModule: isDeclarationExposedFromModule
+      isItemExposedFromModule: isDeclarationExposedFromModule,
+      token
     })
 
     const findLocationOfCustomTypeVariantFromImportedFiles = findLocationOfItemFromImportedFiles({
       findItemWithName: ElmSyntax.findCustomTypeVariantWithName,
-      isItemExposedFromModule: isCustomTypeVariantExposedFromModule
+      isItemExposedFromModule: isCustomTypeVariantExposedFromModule,
+      token
     })
 
     type FindLocationOfItemForModuleNameInput<item> = {
@@ -966,7 +971,7 @@ const provider = (globalState: GlobalState) => {
 
       const start = Date.now()
       const text = doc.getText()
-      const ast = await ElmToAst.run(text)
+      const ast = await ElmToAst.run(text, token)
 
 
       if (ast) {
@@ -982,14 +987,14 @@ const provider = (globalState: GlobalState) => {
 
           // Handle module imports
           let packages = await sharedLogic.getMappingOfModuleNameToDocJsonFilepath(globalState, elmJsonFile)
-          matchingLocation = await handleJumpToLinksForImports({ document: doc, position, ast, elmJsonFile, packages })
+          matchingLocation = await handleJumpToLinksForImports({ document: doc, position, ast, elmJsonFile, packages, token })
           if (matchingLocation) {
             console.info('provideDefinition', `${Date.now() - start}ms`)
             return matchingLocation
           }
 
           // Handle module declarations
-          matchingLocation = await handleJumpToLinksForDeclarations({ position, ast, doc, elmJsonFile, packages })
+          matchingLocation = await handleJumpToLinksForDeclarations({ position, ast, doc, elmJsonFile, packages, token })
           if (matchingLocation) {
             console.info('provideDefinition', `${Date.now() - start}ms`)
             return matchingLocation

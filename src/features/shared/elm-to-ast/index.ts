@@ -1,4 +1,5 @@
 import * as path from 'path'
+import * as vscode from 'vscode'
 import * as WorkerThreads from 'worker_threads'
 import * as ElmSyntax from './elm-syntax'
 
@@ -9,11 +10,21 @@ type WorkerState =
 
 let workerState: WorkerState = { tag: 'NotRunning' }
 
-// TODO: Can bring in cancel token as well and kill it then
-export const run = async (rawElmSource: string): Promise<ElmSyntax.Ast | undefined> => {
+export const run = async (rawElmSource: string, token: vscode.CancellationToken): Promise<ElmSyntax.Ast | undefined> => {
   return new Promise((resolve) => {
     const worker = getWorker(resolve)
-    workerState = { tag: 'Busy', worker }
+    const newWorkerState: WorkerState = { tag: 'Busy', worker }
+    token.onCancellationRequested(() => {
+      if (workerState === newWorkerState) {
+        // Maybe it’s better to never terminate? Just let the thread chug along?
+        // or queue things? only terminate if cancellation requested?
+        console.info('CANCEL!!!')
+        worker.terminate()
+      } else {
+        console.info('DONT CANCEL')
+      }
+    })
+    workerState = newWorkerState
     worker.postMessage(rawElmSource)
   })
 }
