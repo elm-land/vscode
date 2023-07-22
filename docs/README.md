@@ -101,7 +101,7 @@ To help you convert HTML snippets to Elm code and help newcomers learn the synta
 
 __Setting:__ `elmLand.feature.goToSymbol`
 
-You can navigate symbols inside a file. This is helpful for quickly navigating among functions, values and types in a file.
+You can navigate symbols inside a file. This is helpful for quickly navigating among functions, values and types in a file. You can also navigate to any top-level declaration in any file, which is a quick way of getting to the right file.
 
 ![Go to symbol](./go-to-symbol.gif)
 
