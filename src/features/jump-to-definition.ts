@@ -747,7 +747,9 @@ const provider = (globalState: GlobalState) => {
         case 'record':
           let matchingNode = argument.value.record.value.find(x => x.value === name)
           if (matchingNode) {
-            matchingNode.range
+            return matchingNode.range
+          } else {
+            return null
           }
         case 'string':
           return null
