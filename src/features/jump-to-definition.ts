@@ -566,7 +566,7 @@ const provider = (globalState: GlobalState) => {
           let item = expression.value.lambda.expression
           let range = sharedLogic.fromElmRange(item.range)
           if (range.contains(position)) {
-            return findLocationOfItemsForExpression(item, args, localDeclarations, localPatterns)
+            return findLocationOfItemsForExpression(item, args, localDeclarations, localPatterns.concat(patterns))
           }
           return null
         case 'let':
