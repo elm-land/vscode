@@ -712,7 +712,11 @@ const provider = (globalState: GlobalState) => {
         case 'all':
           return null
         case 'as':
-          return null
+          if (argument.value.as.name.value === name) {
+            return argument.value.as.name.range
+          } else {
+            return null
+          }
         case 'char':
           return null
         case 'float':
