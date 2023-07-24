@@ -128,7 +128,12 @@ const Elm = {
     const command = `(cd ${input.elmJsonFile.projectFolder} && elm make ${deduplicated.join(' ')} --output=/dev/null --report=json)`
     const promise: Promise<ParsedError | undefined> =
       new Promise((resolve) =>
-        child_process.exec(command, async (err, _, stderr) => {
+        child_process.exec(
+          command,
+          {
+            env: sharedLogic.npxEnv()
+          },
+          async (err, _, stderr) => {
           if (err) {
             const ELM_BINARY_NOT_FOUND = 127
             if (err.code === ELM_BINARY_NOT_FOUND || err.message.includes(`'elm' is not recognized`)) {

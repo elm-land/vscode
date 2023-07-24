@@ -45,16 +45,14 @@ const provider = (globalState: GlobalState) => {
   }
 
   type HandleJumpToLinksForImportsInput = {
-    document: vscode.TextDocument
     position: vscode.Position
     ast: ElmSyntax.Ast
     elmJsonFile: ElmJsonFile
-    packages: Packages
     token: vscode.CancellationToken
   }
 
   const handleJumpToLinksForImports =
-    async ({ document, position, ast, elmJsonFile, packages, token }: HandleJumpToLinksForImportsInput)
+    async ({ position, ast, elmJsonFile, token }: HandleJumpToLinksForImportsInput)
       : Promise<vscode.Location | null> => {
 
       for (let import_ of ast.imports) {
@@ -129,11 +127,10 @@ const provider = (globalState: GlobalState) => {
     ast: ElmSyntax.Ast,
     doc: vscode.TextDocument
     elmJsonFile: ElmJsonFile
-    packages: Packages
     token: vscode.CancellationToken
   }
 
-  const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFile, packages, token }: HandleJumpToLinksForDeclarationsInput): Promise<vscode.Location | null> => {
+  const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFile, token }: HandleJumpToLinksForDeclarationsInput): Promise<vscode.Location | null> => {
     let {
       aliasMappingToModuleNames,
       explicitExposingValuesForImports,
@@ -141,7 +138,7 @@ const provider = (globalState: GlobalState) => {
     } = ElmSyntax.getInitialPreludeMappings()
 
     const findImportedModuleNamesThatMightHaveExposedThisValue = (moduleName: string): string[] => {
-      let explicitMatches = explicitExposingValuesForImports[moduleName] || []
+      let explicitMatches = explicitExposingValuesForImports.get(moduleName) ?? []
       return explicitMatches.concat(hasUnknownImportsFromExposingAll)
     }
 
@@ -320,7 +317,7 @@ const provider = (globalState: GlobalState) => {
           // would return "Html.Attributes"
           let parentModuleName = parentModules.join('.')
 
-          let aliases = aliasMappingToModuleNames[parentModuleName] || []
+          let aliases = aliasMappingToModuleNames.get(parentModuleName) ?? []
           let moduleNamesToCheck = [parentModuleName].concat(aliases)
 
           // Check local project files
@@ -571,30 +568,57 @@ const provider = (globalState: GlobalState) => {
           let item = expression.value.lambda.expression
           let range = sharedLogic.fromElmRange(item.range)
           if (range.contains(position)) {
-            return findLocationOfItemsForExpression(item, args, localDeclarations, localPatterns)
+            return findLocationOfItemsForExpression(item, args, localDeclarations, localPatterns.concat(patterns))
           }
           return null
         case 'let':
           let letDeclarations = expression.value.let.declarations
           let newLocalDeclarations = localDeclarations.concat(letDeclarations)
+          let newLocalPatterns =
+            localPatterns.concat(
+              letDeclarations.flatMap(letDeclaration => {
+                switch (letDeclaration.value.type) {
+                  case 'function':
+                    return []
+                  case 'destructuring':
+                    return letDeclaration.value.destructuring.pattern
+                }
+              })
+            )
 
           // Handle declarations between "let" and "in" keywords
           for (let declaration of letDeclarations) {
             let range = sharedLogic.fromElmRange(declaration.range)
-            if (range.contains(position) && ElmSyntax.isFunctionDeclaration(declaration)) {
-              return findLocationForFunctionDeclaration(
-                declaration.value.function,
-                args,
-                newLocalDeclarations,
-                localPatterns
-              )
+            if (range.contains(position)) {
+              switch (declaration.value.type) {
+                case 'function':
+                  return findLocationForFunctionDeclaration(
+                    declaration.value.function,
+                    args,
+                    newLocalDeclarations,
+                    newLocalPatterns
+                  )
+                case 'destructuring':
+                  let pattern = declaration.value.destructuring.pattern
+
+                  let patternRange = sharedLogic.fromElmRange(pattern.range)
+                  if (patternRange.contains(position)) {
+                    return findLocationOfCustomTypeForPattern(pattern.value, patternRange)
+                  }
+
+                  let item = declaration.value.destructuring.expression
+                  let itemRange = sharedLogic.fromElmRange(item.range)
+                  if (itemRange.contains(position)) {
+                    return findLocationOfItemsForExpression(item, args, localDeclarations, newLocalPatterns.concat([pattern]))
+                  }
+              }
             }
           }
 
           // Handle expression after the "in" keyword
           let range2 = sharedLogic.fromElmRange(expression.value.let.expression.range)
           if (range2.contains(position)) {
-            return findLocationOfItemsForExpression(expression.value.let.expression, args, newLocalDeclarations, localPatterns)
+            return findLocationOfItemsForExpression(expression.value.let.expression, args, newLocalDeclarations, newLocalPatterns)
           }
           return null
         case 'list':
@@ -690,7 +714,11 @@ const provider = (globalState: GlobalState) => {
         case 'all':
           return null
         case 'as':
-          return null
+          if (argument.value.as.name.value === name) {
+            return argument.value.as.name.range
+          } else {
+            return null
+          }
         case 'char':
           return null
         case 'float':
@@ -721,7 +749,9 @@ const provider = (globalState: GlobalState) => {
         case 'record':
           let matchingNode = argument.value.record.value.find(x => x.value === name)
           if (matchingNode) {
-            matchingNode.range
+            return matchingNode.range
+          } else {
+            return null
           }
         case 'string':
           return null
@@ -864,8 +894,12 @@ const provider = (globalState: GlobalState) => {
       if (import_.value.moduleAlias) {
         let alias = import_.value.moduleAlias.value[0]
         if (alias !== undefined) {
-          aliasMappingToModuleNames[alias] = aliasMappingToModuleNames[alias] || [] as string[]
-          (aliasMappingToModuleNames[alias] as any).push(moduleName)
+          const previous = aliasMappingToModuleNames.get(alias)
+          if (previous === undefined) {
+            aliasMappingToModuleNames.set(alias, [moduleName])
+          } else {
+            previous.push(moduleName)
+          }
         }
       }
 
@@ -882,8 +916,12 @@ const provider = (globalState: GlobalState) => {
               .map(node => ElmSyntax.toTopLevelExposeName(node.value))
 
           for (let exportedName of namesOfExportedThings) {
-            explicitExposingValuesForImports[exportedName] = explicitExposingValuesForImports[exportedName] || [] as string[]
-            (explicitExposingValuesForImports[exportedName] as string[]).push(moduleName)
+            const previous = explicitExposingValuesForImports.get(exportedName)
+            if (previous === undefined) {
+              explicitExposingValuesForImports.set(exportedName, [moduleName])
+            } else {
+              previous.push(moduleName)
+            }
           }
 
           if (isExposingAnyCustomVariants) {
@@ -986,15 +1024,14 @@ const provider = (globalState: GlobalState) => {
           }
 
           // Handle module imports
-          let packages = await sharedLogic.getMappingOfModuleNameToDocJsonFilepath(globalState, elmJsonFile)
-          matchingLocation = await handleJumpToLinksForImports({ document: doc, position, ast, elmJsonFile, packages, token })
+          matchingLocation = await handleJumpToLinksForImports({ position, ast, elmJsonFile, token })
           if (matchingLocation) {
             console.info('provideDefinition', `${Date.now() - start}ms`)
             return matchingLocation
           }
 
           // Handle module declarations
-          matchingLocation = await handleJumpToLinksForDeclarations({ position, ast, doc, elmJsonFile, packages, token })
+          matchingLocation = await handleJumpToLinksForDeclarations({ position, ast, doc, elmJsonFile, token })
           if (matchingLocation) {
             console.info('provideDefinition', `${Date.now() - start}ms`)
             return matchingLocation
