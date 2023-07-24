@@ -1,7 +1,7 @@
 import * as vscode from "vscode"
 import * as os from "os"
 import * as child_process from "child_process"
-import { Feature } from "./shared/logic"
+import sharedLogic, { Feature } from "./shared/logic"
 
 export const feature: Feature = ({ context }) => {
   context.subscriptions.push(
@@ -38,7 +38,12 @@ function runElmFormat(document: vscode.TextDocument): Promise<string> {
   const command = `elm-format --stdin --yes`
   const original = document.getText()
   return new Promise((resolve, reject) => {
-    const process_ = child_process.exec(command, async (err, stdout, stderr) => {
+    const process_ = child_process.exec(
+      command,
+      {
+        env: sharedLogic.npxEnv()
+      },
+      async (err, stdout, stderr) => {
       if (err) {
         const ELM_FORMAT_BINARY_NOT_FOUND = 127
         if (err.code === ELM_FORMAT_BINARY_NOT_FOUND || err.message.includes(`'elm-format' is not recognized`)) {
