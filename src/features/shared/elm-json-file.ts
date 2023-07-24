@@ -53,18 +53,18 @@ export type BinOp = {
 
 
 export const getDocumentationForElmPackage = async (globalState: GlobalState, fsPath: string): Promise<ModuleDoc[]> => {
-  let cachedDocsForThisFsPath = globalState.cachedDocs[fsPath]
+  let cachedDocsForThisFsPath = globalState.cachedDocs.get(fsPath)
 
-  if (cachedDocsForThisFsPath) {
+  if (cachedDocsForThisFsPath !== undefined) {
     return cachedDocsForThisFsPath
   } else {
     try {
       let buffer = await vscode.workspace.fs.readFile(vscode.Uri.file(fsPath))
       let contents = Buffer.from(buffer).toString('utf8')
       let json = JSON.parse(contents)
-      globalState.cachedDocs[fsPath] = json
+      globalState.cachedDocs.set(fsPath, json)
       return json
-    } catch (_) {
+    } catch {
       return []
     }
   }

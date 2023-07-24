@@ -45,15 +45,13 @@ const provider = (globalState: GlobalState) => {
   }
 
   type HandleJumpToLinksForImportsInput = {
-    document: vscode.TextDocument
     position: vscode.Position
     ast: ElmSyntax.Ast
     elmJsonFile: ElmJsonFile
-    packages: Packages
   }
 
   const handleJumpToLinksForImports =
-    async ({ document, position, ast, elmJsonFile, packages }: HandleJumpToLinksForImportsInput)
+    async ({ position, ast, elmJsonFile }: HandleJumpToLinksForImportsInput)
       : Promise<vscode.Location | null> => {
 
       for (let import_ of ast.imports) {
@@ -128,10 +126,9 @@ const provider = (globalState: GlobalState) => {
     ast: ElmSyntax.Ast,
     doc: vscode.TextDocument
     elmJsonFile: ElmJsonFile
-    packages: Packages
   }
 
-  const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFile, packages }: HandleJumpToLinksForDeclarationsInput): Promise<vscode.Location | null> => {
+  const handleJumpToLinksForDeclarations = async ({ position, ast, doc, elmJsonFile }: HandleJumpToLinksForDeclarationsInput): Promise<vscode.Location | null> => {
     let {
       aliasMappingToModuleNames,
       explicitExposingValuesForImports,
@@ -139,7 +136,7 @@ const provider = (globalState: GlobalState) => {
     } = ElmSyntax.getInitialPreludeMappings()
 
     const findImportedModuleNamesThatMightHaveExposedThisValue = (moduleName: string): string[] => {
-      let explicitMatches = explicitExposingValuesForImports[moduleName] || []
+      let explicitMatches = explicitExposingValuesForImports.get(moduleName) ?? []
       return explicitMatches.concat(hasUnknownImportsFromExposingAll)
     }
 
@@ -315,7 +312,7 @@ const provider = (globalState: GlobalState) => {
           // would return "Html.Attributes"
           let parentModuleName = parentModules.join('.')
 
-          let aliases = aliasMappingToModuleNames[parentModuleName] || []
+          let aliases = aliasMappingToModuleNames.get(parentModuleName) ?? []
           let moduleNamesToCheck = [parentModuleName].concat(aliases)
 
           // Check local project files
@@ -892,8 +889,12 @@ const provider = (globalState: GlobalState) => {
       if (import_.value.moduleAlias) {
         let alias = import_.value.moduleAlias.value[0]
         if (alias !== undefined) {
-          aliasMappingToModuleNames[alias] = aliasMappingToModuleNames[alias] || [] as string[]
-          (aliasMappingToModuleNames[alias] as any).push(moduleName)
+          const previous = aliasMappingToModuleNames.get(alias)
+          if (previous === undefined) {
+            aliasMappingToModuleNames.set(alias, [moduleName])
+          } else {
+            previous.push(moduleName)
+          }
         }
       }
 
@@ -910,8 +911,12 @@ const provider = (globalState: GlobalState) => {
               .map(node => ElmSyntax.toTopLevelExposeName(node.value))
 
           for (let exportedName of namesOfExportedThings) {
-            explicitExposingValuesForImports[exportedName] = explicitExposingValuesForImports[exportedName] || [] as string[]
-            (explicitExposingValuesForImports[exportedName] as string[]).push(moduleName)
+            const previous = explicitExposingValuesForImports.get(exportedName)
+            if (previous === undefined) {
+              explicitExposingValuesForImports.set(exportedName, [moduleName])
+            } else {
+              previous.push(moduleName)
+            }
           }
 
           if (isExposingAnyCustomVariants) {
@@ -1014,15 +1019,14 @@ const provider = (globalState: GlobalState) => {
           }
 
           // Handle module imports
-          let packages = await sharedLogic.getMappingOfModuleNameToDocJsonFilepath(globalState, elmJsonFile)
-          matchingLocation = await handleJumpToLinksForImports({ document: doc, position, ast, elmJsonFile, packages })
+          matchingLocation = await handleJumpToLinksForImports({ position, ast, elmJsonFile })
           if (matchingLocation) {
             console.info('provideDefinition', `${Date.now() - start}ms`)
             return matchingLocation
           }
 
           // Handle module declarations
-          matchingLocation = await handleJumpToLinksForDeclarations({ position, ast, doc, elmJsonFile, packages })
+          matchingLocation = await handleJumpToLinksForDeclarations({ position, ast, doc, elmJsonFile })
           if (matchingLocation) {
             console.info('provideDefinition', `${Date.now() - start}ms`)
             return matchingLocation

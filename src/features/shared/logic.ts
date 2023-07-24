@@ -23,20 +23,20 @@ let findElmJsonFor = (globalState: AutodetectElmJson.GlobalState, uri: vscode.Ur
   }
 }
 
-const getMappingOfModuleNameToDocJsonFilepath = async (globalState: AutodetectElmJson.GlobalState, elmJsonFile: ElmJsonFile): Promise<Record<string, string>> => {
-  let packages: { [key: string]: string } = {}
+const getMappingOfModuleNameToDocJsonFilepath = async (globalState: AutodetectElmJson.GlobalState, elmJsonFile: ElmJsonFile): Promise<Map<string, string>> => {
+  const packages = new Map<string, string>()
   const dependencies = elmJsonFile.dependencies
-  for (let dep of dependencies) {
-    let docs = await getDocumentationForElmPackage(globalState, dep.fsPath)
-    for (let doc of docs) {
-      packages[doc.name] = dep.fsPath
+  for (const dep of dependencies) {
+    const docs = await getDocumentationForElmPackage(globalState, dep.fsPath)
+    for (const doc of docs) {
+      packages.set(doc.name, dep.fsPath)
     }
   }
 
   return packages
 }
 
-const findFirstOccurenceOfWordInFile = (word: string, rawJsonString: string): [number, number, number, number] | undefined => {
+const findFirstOccurrenceOfWordInFile = (word: string, rawJsonString: string): [number, number, number, number] | undefined => {
   if (word && rawJsonString) {
     const regex = new RegExp(word, 'm')
     const match = rawJsonString.match(regex)
@@ -104,7 +104,7 @@ export default {
   findElmJsonFor,
   fromElmRange,
   getMappingOfModuleNameToDocJsonFilepath,
-  findFirstOccurenceOfWordInFile,
+  findFirstOccurenceOfWordInFile: findFirstOccurrenceOfWordInFile,
   isDefined,
   doesModuleExposesValue,
   keepFilesThatExist
