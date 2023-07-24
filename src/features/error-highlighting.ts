@@ -125,57 +125,89 @@ type ParsedReportError = {
 const Elm = {
   compile: (input: { elmJsonFile: ElmJsonFile, elmFilesToCompile: string[] }): Promise<ParsedError | undefined> => {
     let deduplicated = [...new Set(input.elmFilesToCompile)]
-    const command = `(cd ${input.elmJsonFile.projectFolder} && elm make ${deduplicated.join(' ')} --output=/dev/null --report=json)`
     const promise: Promise<ParsedError | undefined> =
-      new Promise((resolve) =>
-        child_process.exec(
-          command,
+      new Promise((resolve, reject) => {
+        const isWindows = process.platform === 'win32'
+        // This uses `spawn` so that we can support folders with spaces in them
+        // without having to think about escaping.
+        const child = child_process.spawn(
+          'elm',
+          [
+            'make',
+            // `shell: true` is needed on Windows to execute shell scripts (non .exe files).
+            // When installing binaries with npm on Windows they are wrapped by a shell script.
+            // `shell: true` requires manual escaping. Luckily, paths on Windows cannot contain
+            // double quotes, so just adding double quotes around them should be enough and correct.
+            ...(isWindows ? deduplicated.map(file => `"${file}"`) : deduplicated),
+            '--output=/dev/null',
+            '--report=json'
+          ],
           {
-            env: sharedLogic.npxEnv()
-          },
-          async (err, _, stderr) => {
-          if (err) {
-            const ELM_BINARY_NOT_FOUND = 127
-            if (err.code === ELM_BINARY_NOT_FOUND || err.message.includes(`'elm' is not recognized`)) {
-              let response = await vscode.window.showInformationMessage(
-                'The "Error highlighting" feature requires "elm"',
-                { modal: false },
-                'Install'
-              )
-
-              if (response === 'Install') {
-                vscode.commands.executeCommand('elmLand.installElm')
-              }
-            } else {
-              try {
-                const json: ElmError = JSON.parse(stderr)
-
-                switch (json.type) {
-                  case 'compile-errors':
-                    let error1: ParsedCompileError = {
-                      kind: 'compile-errors',
-                      errors: json.errors
-                    }
-                    return resolve(error1)
-                  case 'error':
-                    let error2: ParsedReportError = {
-                      kind: 'error',
-                      title: json.title,
-                      path: json.path,
-                      message: json.message
-                    }
-                    return resolve(error2)
-                  default:
-                    throw new Error("Unhandled error type: " + ((json as any).type))
-                }
-              } catch (ex) {
-                resolve({ kind: 'unknown', raw: stderr })
-              }
-            }
-          } else {
-            resolve(undefined)
+            cwd: input.elmJsonFile.projectFolder,
+            env: sharedLogic.npxEnv(),
+            shell: isWindows
           }
-        }))
+        )
+
+        child.on('error', (err: Error & { code?: string }) => {
+          if (err.code === "ENOENT") {
+            vscode.window.showInformationMessage(
+              'The "Error highlighting" feature requires "elm"',
+              { modal: false },
+              'Install'
+            ).then(
+              response => {
+                if (response === 'Install') {
+                  vscode.commands.executeCommand('elmLand.installElm')
+                }
+                resolve(undefined)
+              },
+              reject
+            )
+          } else {
+            resolve({ kind: 'unknown', raw: err.message })
+          }
+        })
+
+        const stderrBuffers: Array<Buffer> = []
+
+        child.stderr.on('data', (chunk: Buffer) => {
+          stderrBuffers.push(chunk)
+        })
+
+        child.on('exit', (exitCode) => {
+          if (exitCode === 0) {
+            resolve(undefined)
+          } else {
+            const stderr = Buffer.concat(stderrBuffers).toString('utf-8')
+
+            try {
+              const json: ElmError = JSON.parse(stderr)
+
+              switch (json.type) {
+                case 'compile-errors':
+                  let error1: ParsedCompileError = {
+                    kind: 'compile-errors',
+                    errors: json.errors
+                  }
+                  return resolve(error1)
+                case 'error':
+                  let error2: ParsedReportError = {
+                    kind: 'error',
+                    title: json.title,
+                    path: json.path,
+                    message: json.message
+                  }
+                  return resolve(error2)
+                default:
+                  throw new Error("Unhandled error type: " + ((json as any).type))
+              }
+            } catch {
+              resolve({ kind: 'unknown', raw: stderr })
+            }
+          }
+        })
+      })
 
     return promise
   },
