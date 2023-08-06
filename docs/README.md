@@ -97,6 +97,26 @@ To help you convert HTML snippets to Elm code and help newcomers learn the synta
 
 ---
 
+### __Go to symbol__
+
+__Setting:__ `elmLand.feature.goToSymbol`
+
+You can navigate symbols inside a file. This is helpful for quickly navigating among functions, values and types in a file. The Outline panel below the file tree in the sidebar also displays all functions, values and types in the file.
+
+![Go to symbol](./go-to-symbol.gif)
+
+---
+
+### __Open symbol by name__
+
+__Setting:__ `elmLand.feature.openSymbolByName`
+
+You can navigate to any top-level declaration in any file, which is a quick way of getting to the right file.
+
+![Open symbol by name](./open-symbol-by-name.gif)
+
+---
+
 ## __Performance Table__
 
 Elm's [editor plugins repo](https://github.com/elm/editor-plugins) recommends doing performance profiling to help others learn how different editors implement features, and also to help try to think of ways to bring down costs.
