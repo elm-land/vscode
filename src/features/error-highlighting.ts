@@ -14,7 +14,7 @@ export const feature: Feature = ({ globalState, context }) => {
   context.subscriptions.push(
     vscode.commands.registerCommand('elmLand.installElm', () => {
       const terminal = vscode.window.createTerminal(`Install elm`)
-      terminal.sendText(`(cd ${os.homedir()} && npm install -g elm@0.19.1)`)
+      terminal.sendText(`npm install -g elm@0.19.1`)
       terminal.show()
     })
   )
