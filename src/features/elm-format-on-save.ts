@@ -7,7 +7,7 @@ export const feature: Feature = ({ context }) => {
   context.subscriptions.push(
     vscode.commands.registerCommand('elmLand.installElmFormat', () => {
       const terminal = vscode.window.createTerminal(`Install elm-format`)
-      terminal.sendText(`(cd ${os.homedir()} && npm install -g elm-format@0.8.5)`)
+      terminal.sendText(`(cd ${os.homedir()} && npm install -g elm-format@0.8.7)`)
       terminal.show()
     })
   )
