@@ -40,13 +40,13 @@
         "command": "elmLand.htmlToElm",
         "enablement": "false"
       },
-      { 
+      {
         "category": "Elm Land",
         "title": "Install Elm",
         "command": "elmLand.installElm",
         "enablement": "false"
       },
-      { 
+      {
         "category": "Elm Land",
         "title": "Install elm-format",
         "command": "elmLand.installElmFormat",
@@ -112,6 +112,12 @@
             "description": "Enable the 'HTML to Elm' feature",
             "type": "boolean",
             "default": true
+          },
+          "elmLand.compilerFilepath": {
+            "order": 7,
+            "description": "The path to your Elm compiler",
+            "type": "string",
+            "default": "elm"
           }
         }
       }
