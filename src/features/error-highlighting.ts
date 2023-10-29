@@ -129,7 +129,7 @@ const Elm = {
       new Promise((resolve, reject) => {
         const isWindows = process.platform === 'win32'
         const compiler = vscode.workspace.getConfiguration('elmLand').compilerFilepath;
-        console.log('compilerFilepath:', compiler);
+
         // This uses `spawn` so that we can support folders with spaces in them
         // without having to think about escaping.
         const child = child_process.spawn(
