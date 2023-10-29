@@ -128,10 +128,12 @@ const Elm = {
     const promise: Promise<ParsedError | undefined> =
       new Promise((resolve, reject) => {
         const isWindows = process.platform === 'win32'
+        const compiler = vscode.workspace.getConfiguration('elmLand').compilerFilepath;
+
         // This uses `spawn` so that we can support folders with spaces in them
         // without having to think about escaping.
         const child = child_process.spawn(
-          'elm',
+          compiler,
           [
             'make',
             // `shell: true` is needed on Windows to execute shell scripts (non .exe files).
