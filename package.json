@@ -2,7 +2,7 @@
   "name": "elm-land",
   "displayName": "Elm Land",
   "description": "A fast, reliable, and customizable plugin for the Elm language.",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "icon": "src/elm-land-plugin.png",
   "publisher": "elm-land",
   "repository": "https://github.com/elm-land/vscode",
