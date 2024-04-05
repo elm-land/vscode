@@ -11,6 +11,8 @@
   - [Offline package docs](#offline-package-docs)
   - [Module import autocomplete](#module-import-autocomplete)
   - [Convert HTML to Elm](#convert-html-to-elm)
+  - [Go to symbol](#go-to-symbol)
+  - [Open symbol by name](#open-symbol-by-name)
 - 📊 [Performance Table](#performance-table)
 - 💖 [Thank you, Elm community](#thank-you-elm-community)
 - 🛠️ [Want to contribute?](#want-to-contribute)
