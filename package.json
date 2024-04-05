@@ -40,13 +40,13 @@
         "command": "elmLand.htmlToElm",
         "enablement": "false"
       },
-      { 
+      {
         "category": "Elm Land",
         "title": "Install Elm",
         "command": "elmLand.installElm",
         "enablement": "false"
       },
-      { 
+      {
         "category": "Elm Land",
         "title": "Install elm-format",
         "command": "elmLand.installElmFormat",
@@ -124,6 +124,12 @@
             "description": "Enable the 'Open symbol by name' feature",
             "type": "boolean",
             "default": true
+          },
+          "elmLand.compilerFilepath": {
+            "order": 9,
+            "description": "The path to your Elm compiler",
+            "type": "string",
+            "default": "elm"
           }
         }
       }
@@ -153,8 +159,8 @@
     "referencesProvider": "true"
   },
   "dependencies": {
-    "elm": "0.19.1-5",
-    "elm-format": "0.8.5"
+    "elm": "0.19.1-6",
+    "elm-format": "0.8.7"
   },
   "devDependencies": {
     "@types/node": "18.11.18",

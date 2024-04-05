@@ -52,7 +52,7 @@ fromHtmlToElm html =
 
         Err problem ->
             Nothing
-            
+
 
 toElmString : List Html.Parser.Node -> String
 toElmString elements =
@@ -79,8 +79,7 @@ toElmString elements =
                         |> Elm.Pretty.prettyExpression
     in
     Pretty.pretty 80 doc
-    
-    
+
 
 toNodeExpression : Html.Parser.Node -> Maybe Elm.Syntax.Expression.Expression
 toNodeExpression node =
@@ -109,7 +108,8 @@ toNodeExpression node =
 
                                 Nothing ->
                                     if tagName == "pathmango" then
-                                        [ Elm.Syntax.Expression.FunctionOrValue [] ("path") ]
+                                        [ Elm.Syntax.Expression.FunctionOrValue [] "path" ]
+
                                     else if tagName == "main" || tagName == "text" then
                                         [ Elm.Syntax.Expression.FunctionOrValue [] (tagName ++ "_") ]
 
