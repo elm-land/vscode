@@ -57,7 +57,7 @@
       "[elm]": {
         "editor.tabSize": 4,
         "editor.formatOnSave": true,
-        "editor.wordBasedSuggestions": false
+        "editor.wordBasedSuggestions": "off"
       }
     },
     "configuration": [
