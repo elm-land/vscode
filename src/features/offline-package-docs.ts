@@ -22,7 +22,7 @@ export const feature: Feature = ({ globalState, context }) => {
 
       let start = Date.now()
       let text = document.getText()
-      let ast = await ElmToAst.run(text)
+      let ast = await ElmToAst.run(text, token)
       let uri = vscode.Uri.parse("command:elmLand.browsePackageDocs")
       let elmJsonFile = SharedLogic.findElmJsonFor(globalState, document.uri)
 

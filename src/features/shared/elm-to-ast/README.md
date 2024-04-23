@@ -1,8 +1,6 @@
 # Elm to AST
 > A script that turns raw Elm source code into a structured JSON value
 
-This script is intentionally commited to source control so there's no extra build step needed to run this plugin.
-
 ## Building from scratch
 
 1. Install these NPM terminal commands
