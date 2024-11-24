@@ -65,10 +65,11 @@ export const feature: Feature = ({ context }) => {
 
 // Checks that the characters of `query` appear in their order in a candidate symbol,
 // as documented here: https://code.visualstudio.com/api/references/vscode-api#WorkspaceSymbolProvider
+// In TypeScript, this is case insensitive, so we do that too.
 const nameMatchesQuery = (name: string, query: string): boolean => {
-  const nameChars = Array.from(name)
+  const nameChars = Array.from(name.toLowerCase())
   let nameIndex = 0
-  outer: for (const char of query) {
+  outer: for (const char of query.toLowerCase()) {
     for (; nameIndex < nameChars.length; nameIndex++) {
       if (nameChars[nameIndex] === char) continue outer
     }
