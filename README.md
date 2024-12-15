@@ -19,6 +19,8 @@ Visual Studio Code is available for Mac, Windows, and Linux.
 - Offline-friendly package docs
 - Module import autocomplete
 - Convert HTML to Elm
+- Go to symbol
+- Open symbol by name
 
 __More documentation__
 

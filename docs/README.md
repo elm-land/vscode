@@ -11,6 +11,8 @@
   - [Offline package docs](#offline-package-docs)
   - [Module import autocomplete](#module-import-autocomplete)
   - [Convert HTML to Elm](#convert-html-to-elm)
+  - [Go to symbol](#go-to-symbol)
+  - [Open symbol by name](#open-symbol-by-name)
 - 📊 [Performance Table](#performance-table)
 - 💖 [Thank you, Elm community](#thank-you-elm-community)
 - 🛠️ [Want to contribute?](#want-to-contribute)
@@ -94,6 +96,26 @@ __Setting:__ `elmLand.feature.htmlToElm`
 To help you convert HTML snippets to Elm code and help newcomers learn the syntax of Elm, this plugin comes with a built-in "HTML to Elm" action whenever you highlight over a snippet of HTML code.
 
 ![HTML to Elm demo with a TailwindCSS snippet](./html-to-elm.gif)
+
+---
+
+### __Go to symbol__
+
+__Setting:__ `elmLand.feature.goToSymbol`
+
+You can navigate symbols inside a file. This is helpful for quickly navigating among functions, values and types in a file. The Outline panel below the file tree in the sidebar also displays all functions, values and types in the file.
+
+![Go to symbol](./go-to-symbol.gif)
+
+---
+
+### __Open symbol by name__
+
+__Setting:__ `elmLand.feature.openSymbolByName`
+
+You can navigate to any top-level declaration in any file, which is a quick way of getting to the right file.
+
+![Open symbol by name](./open-symbol-by-name.gif)
 
 ---
 

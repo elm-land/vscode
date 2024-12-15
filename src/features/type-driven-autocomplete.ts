@@ -82,7 +82,7 @@ export const feature: Feature = ({ globalState, context }) => {
             let elmJsonFile = SharedLogic.findElmJsonFor(globalState, document.uri)
 
             if (elmJsonFile) {
-              let moduleDoc = await findLocalElmModuleDoc({ elmJsonFile, moduleName })
+              let moduleDoc = await findLocalElmModuleDoc({ elmJsonFile, moduleName, token })
               if (moduleDoc) {
                 console.info(`autocomplete`, `${Date.now() - start}ms`)
                 return toCompletionItems(moduleDoc, allModuleNames)
@@ -108,7 +108,7 @@ export const feature: Feature = ({ globalState, context }) => {
 // SCANNING LOCAL PROJECT FILES
 
 const findLocalElmModuleDoc =
-  async ({ elmJsonFile, moduleName }: { elmJsonFile: ElmJsonFile, moduleName: string }): Promise<ModuleDoc | undefined> => {
+  async ({ elmJsonFile, moduleName, token }: { elmJsonFile: ElmJsonFile, moduleName: string, token: vscode.CancellationToken }): Promise<ModuleDoc | undefined> => {
 
     let matchingFilepaths = await SharedLogic.keepFilesThatExist(elmJsonFile.sourceDirectories
       .map(folder => path.join(folder, ...moduleName.split('.')) + '.elm'))
@@ -119,7 +119,7 @@ const findLocalElmModuleDoc =
       let uri = vscode.Uri.file(matchingFilepath)
       let document = await vscode.workspace.openTextDocument(uri)
       if (document) {
-        let ast = await ElmToAst.run(document.getText())
+        let ast = await ElmToAst.run(document.getText(), token)
         if (ast) {
           return toModuleDoc(ast)
         }
