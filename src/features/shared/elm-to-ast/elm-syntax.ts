@@ -1,7 +1,7 @@
 /**
  * The JSON AST encoded by the `stil4m/elm-syntax` package:
  * 
- * https://package.elm-lang.org/packages/stil4m/elm-syntax/7.3.7
+ * https://package.elm-lang.org/packages/stil4m/elm-syntax/7.3.8
  * 
  */
 
