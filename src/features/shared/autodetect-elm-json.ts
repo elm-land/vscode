@@ -48,7 +48,7 @@ export const run = async (globalState: GlobalState) => {
     entrypointFilepaths: config.get('entrypointFilepaths') || []
   }
 
-  let elmJsonFileUris = await vscode.workspace.findFiles('**/elm.json', '**/node_modules/**', 10)
+  let elmJsonFileUris = await vscode.workspace.findFiles('**/elm.json', '**/node_modules/**', 100)
   let possibleElmJsonFiles = await Promise.all(toElmJsonFiles({ elmJsonFileUris, settings }))
   globalState.elmJsonFiles = possibleElmJsonFiles.filter(sharedLogic.isDefined)
   globalState.cachedDocs = new Map()
