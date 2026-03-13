@@ -137,6 +137,12 @@
             "type": "boolean",
             "default": true
           },
+          "elmLand.feature.rename": {
+            "order": 11,
+            "description": "Enable the 'Rename symbol' feature (requires elm-find binary)",
+            "type": "boolean",
+            "default": true
+          },
           "elmLand.compilerFilepath": {
             "order": 11,
             "description": "The path to your Elm compiler",

@@ -10,6 +10,7 @@ import * as HtmlToElm from './features/html-to-elm'
 import * as GoToSymbol from "./features/go-to-symbol"
 import * as OpenSymbolByName from "./features/open-symbol-by-name"
 import * as FindReferences from "./features/find-references"
+import * as Rename from "./features/rename"
 
 export async function activate(context: vscode.ExtensionContext) {
   console.info("ACTIVATE")
@@ -38,6 +39,7 @@ export async function activate(context: vscode.ExtensionContext) {
   GoToSymbol.feature({ globalState, context })
   OpenSymbolByName.feature({ globalState, context })
   FindReferences.feature({ globalState, context })
+  Rename.feature({ globalState, context })
 }
 
 export function deactivate() {
