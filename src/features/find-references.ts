@@ -10,6 +10,9 @@ export const feature: Feature = ({ globalState, context }) => {
   context.subscriptions.push(
     vscode.languages.registerReferenceProvider('elm', provider(globalState))
   )
+  context.subscriptions.push(
+    vscode.languages.registerCodeLensProvider('elm', codeLensProvider(globalState))
+  )
 }
 
 const provider = (globalState: GlobalState) => {
@@ -95,6 +98,71 @@ type ElmFindDefinition = {
   module: string
   region: ElmFindRegion
   usages: ElmFindUsage[]
+}
+
+type ElmCodeLens = vscode.CodeLens & {
+  data: { name: string; moduleName: string; projectFolder: string; docUri: vscode.Uri }
+}
+
+const codeLensProvider = (globalState: GlobalState) => {
+  return {
+    async provideCodeLenses(
+      doc: vscode.TextDocument,
+      token: vscode.CancellationToken
+    ): Promise<vscode.CodeLens[]> {
+      const isEnabled: boolean = vscode.workspace.getConfiguration('elmLand').feature.referencesCodeLens
+      if (!isEnabled) return []
+
+      const elmJsonFile = sharedLogic.findElmJsonFor(globalState, doc.uri)
+      if (!elmJsonFile) return []
+
+      const ast = await ElmToAst.run(doc.getText(), token)
+      if (!ast) return []
+
+      const moduleName = ElmSyntax.toModuleData(ast).moduleName.value.join('.')
+      const lenses: ElmCodeLens[] = []
+
+      for (const declaration of ast.declarations) {
+        const name = ElmSyntax.toDeclarationName(declaration)
+        if (!name) continue
+
+        const range = sharedLogic.fromElmRange(declaration.range)
+        const lens = new vscode.CodeLens(range) as ElmCodeLens
+        lens.data = { name, moduleName, projectFolder: elmJsonFile.projectFolder, docUri: doc.uri }
+        lenses.push(lens)
+      }
+
+      return lenses
+    },
+
+    async resolveCodeLens(
+      codeLens: vscode.CodeLens,
+      token: vscode.CancellationToken
+    ): Promise<vscode.CodeLens> {
+      const lens = codeLens as ElmCodeLens
+      const { name, moduleName, projectFolder, docUri } = lens.data
+
+      const elmFindBinary: string = vscode.workspace.getConfiguration('elmLand').elmFindFilepath || 'elm-find'
+      const definitions = await runElmFind({ binary: elmFindBinary, name, moduleName, projectFolder, token })
+
+      const locations: vscode.Location[] = []
+      for (const definition of definitions ?? []) {
+        for (const usage of definition.usages) {
+          const usageUri = vscode.Uri.file(path.resolve(projectFolder, usage.file))
+          locations.push(new vscode.Location(usageUri, fromElmFindRegion(usage.region)))
+        }
+      }
+
+      const count = locations.length
+      lens.command = {
+        title: `${count} reference${count === 1 ? '' : 's'}`,
+        command: 'editor.action.showReferences',
+        arguments: [docUri, lens.range.start, locations]
+      }
+
+      return lens
+    }
+  }
 }
 
 // Convert 1-based elm-find positions to 0-based VS Code positions

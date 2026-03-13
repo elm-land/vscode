@@ -131,14 +131,20 @@
             "type": "boolean",
             "default": true
           },
-          "elmLand.compilerFilepath": {
+          "elmLand.feature.referencesCodeLens": {
             "order": 10,
+            "description": "Show reference counts above each definition via CodeLens (requires elm-find binary)",
+            "type": "boolean",
+            "default": true
+          },
+          "elmLand.compilerFilepath": {
+            "order": 11,
             "description": "The path to your Elm compiler",
             "type": "string",
             "default": "elm"
           },
           "elmLand.elmFindFilepath": {
-            "order": 11,
+            "order": 12,
             "description": "The path to the elm-find binary",
             "type": "string",
             "default": "elm-find"
