@@ -2,7 +2,7 @@
   "name": "elm-land",
   "displayName": "Elm Land",
   "description": "A fast, reliable, and customizable plugin for the Elm language.",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "icon": "src/elm-land-plugin.png",
   "publisher": "elm-land",
   "repository": "https://github.com/elm-land/vscode",
@@ -125,11 +125,23 @@
             "type": "boolean",
             "default": true
           },
-          "elmLand.compilerFilepath": {
+          "elmLand.feature.findReferences": {
             "order": 9,
+            "description": "Enable the 'Find references' feature (requires elm-find binary)",
+            "type": "boolean",
+            "default": true
+          },
+          "elmLand.compilerFilepath": {
+            "order": 10,
             "description": "The path to your Elm compiler",
             "type": "string",
             "default": "elm"
+          },
+          "elmLand.elmFindFilepath": {
+            "order": 11,
+            "description": "The path to the elm-find binary",
+            "type": "string",
+            "default": "elm-find"
           }
         }
       }

@@ -9,6 +9,7 @@ import * as TypeDrivenAutocomplete from './features/type-driven-autocomplete'
 import * as HtmlToElm from './features/html-to-elm'
 import * as GoToSymbol from "./features/go-to-symbol"
 import * as OpenSymbolByName from "./features/open-symbol-by-name"
+import * as FindReferences from "./features/find-references"
 
 export async function activate(context: vscode.ExtensionContext) {
   console.info("ACTIVATE")
@@ -36,6 +37,7 @@ export async function activate(context: vscode.ExtensionContext) {
   HtmlToElm.feature({ globalState, context })
   GoToSymbol.feature({ globalState, context })
   OpenSymbolByName.feature({ globalState, context })
+  FindReferences.feature({ globalState, context })
 }
 
 export function deactivate() {
