@@ -49,9 +49,12 @@ const provider = (globalState: GlobalState) => {
       const elmFindBinary: string = vscode.workspace.getConfiguration('elmLand').elmFindFilepath || 'elm-find'
       const projectFolder = elmJsonFile.projectFolder
 
+      const kind = getKindAtPosition(ast, position)
+
       const definitions = await runElmFind({
         binary: elmFindBinary,
         name: word,
+        kind,
         moduleName,
         projectFolder,
         token
@@ -68,8 +71,9 @@ const provider = (globalState: GlobalState) => {
           locations.push(new vscode.Location(defUri, fromElmFindRegion(definition.region)))
         }
 
-        // Include all usages
+        // Include all usages (exclude mentions — type annotations and exposing clauses)
         for (const usage of definition.usages) {
+          if (usage.tag === 'mention') continue
           const usageUri = vscode.Uri.file(path.resolve(projectFolder, usage.file))
           locations.push(new vscode.Location(usageUri, fromElmFindRegion(usage.region)))
         }
@@ -90,10 +94,14 @@ type ElmFindUsage = {
   file: string
   module: string
   region: ElmFindRegion
+  tag: 'usage' | 'mention'
 }
+
+type ElmFindKind = 'value' | 'type' | 'ctor'
 
 type ElmFindDefinition = {
   name: string
+  kind: ElmFindKind
   file: string
   module: string
   region: ElmFindRegion
@@ -101,7 +109,7 @@ type ElmFindDefinition = {
 }
 
 type ElmCodeLens = vscode.CodeLens & {
-  data: { name: string; moduleName: string; projectFolder: string; docUri: vscode.Uri }
+  data: { name: string; kind: ElmFindKind | undefined; moduleName: string; projectFolder: string; docUri: vscode.Uri }
 }
 
 const codeLensProvider = (globalState: GlobalState) => {
@@ -126,9 +134,10 @@ const codeLensProvider = (globalState: GlobalState) => {
         const name = ElmSyntax.toDeclarationName(declaration)
         if (!name) continue
 
+        const kind = getKindForDeclaration(declaration)
         const range = sharedLogic.fromElmRange(declaration.range)
         const lens = new vscode.CodeLens(range) as ElmCodeLens
-        lens.data = { name, moduleName, projectFolder: elmJsonFile.projectFolder, docUri: doc.uri }
+        lens.data = { name, kind, moduleName, projectFolder: elmJsonFile.projectFolder, docUri: doc.uri }
         lenses.push(lens)
       }
 
@@ -140,14 +149,15 @@ const codeLensProvider = (globalState: GlobalState) => {
       token: vscode.CancellationToken
     ): Promise<vscode.CodeLens> {
       const lens = codeLens as ElmCodeLens
-      const { name, moduleName, projectFolder, docUri } = lens.data
+      const { name, kind, moduleName, projectFolder, docUri } = lens.data
 
       const elmFindBinary: string = vscode.workspace.getConfiguration('elmLand').elmFindFilepath || 'elm-find'
-      const definitions = await runElmFind({ binary: elmFindBinary, name, moduleName, projectFolder, token })
+      const definitions = await runElmFind({ binary: elmFindBinary, name, kind, moduleName, projectFolder, token })
 
       const locations: vscode.Location[] = []
       for (const definition of definitions ?? []) {
         for (const usage of definition.usages) {
+          if (usage.tag === 'mention') continue
           const usageUri = vscode.Uri.file(path.resolve(projectFolder, usage.file))
           locations.push(new vscode.Location(usageUri, fromElmFindRegion(usage.region)))
         }
@@ -165,6 +175,41 @@ const codeLensProvider = (globalState: GlobalState) => {
   }
 }
 
+// Determine the elm-find kind for a symbol at a given cursor position by inspecting declarations.
+// Returns undefined when the cursor is at a usage site rather than a definition.
+const getKindAtPosition = (ast: ElmSyntax.Ast, position: vscode.Position): ElmFindKind | undefined => {
+  const inRange = (range: ElmSyntax.Range) => sharedLogic.fromElmRange(range).contains(position)
+
+  for (const decl of ast.declarations) {
+    switch (decl.value.type) {
+      case 'function':
+        if (inRange(decl.value.function.declaration.value.name.range)) return 'value'
+        break
+      case 'typeAlias':
+        if (inRange(decl.value.typeAlias.name.range)) return 'type'
+        break
+      case 'typedecl':
+        if (inRange(decl.value.typedecl.name.range)) return 'type'
+        for (const ctor of decl.value.typedecl.constructors) {
+          if (inRange(ctor.value.name.range)) return 'ctor'
+        }
+        break
+    }
+  }
+  return undefined
+}
+
+// Determine the elm-find kind for a top-level declaration (used by CodeLens).
+const getKindForDeclaration = (declaration: ElmSyntax.Node<ElmSyntax.Declaration>): ElmFindKind | undefined => {
+  switch (declaration.value.type) {
+    case 'function': return 'value'
+    case 'typeAlias': return 'type'
+    case 'typedecl': return 'type'
+    case 'port': return 'value'
+    default: return undefined
+  }
+}
+
 // Convert 1-based elm-find positions to 0-based VS Code positions
 const fromElmFindRegion = (region: ElmFindRegion): vscode.Range =>
   new vscode.Range(
@@ -177,6 +222,7 @@ const fromElmFindRegion = (region: ElmFindRegion): vscode.Range =>
 type RunElmFindInput = {
   binary: string
   name: string
+  kind: ElmFindKind | undefined
   moduleName: string
   projectFolder: string
   token: vscode.CancellationToken
@@ -184,9 +230,10 @@ type RunElmFindInput = {
 
 const runElmFind = (input: RunElmFindInput): Promise<ElmFindDefinition[] | undefined> => {
   return new Promise((resolve) => {
-    const { binary, name, moduleName, projectFolder, token } = input
+    const { binary, name, kind, moduleName, projectFolder, token } = input
 
     const args = [name, '--module', moduleName, '--project', projectFolder]
+    if (kind) args.push('--kind', kind)
     const child = child_process.spawn(binary, args, { env: sharedLogic.npxEnv() })
 
     let stdout = ''
