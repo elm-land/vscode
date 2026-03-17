@@ -26,17 +26,46 @@ const provideDocumentFormattingEdits = async (
   const start = Date.now()
   // User should disable this feature in the `[elm]` language settings
   try {
-    let text = await runElmFormat(document)
+    const original = document.getText()
+    const formatted = await runElmFormat(original)
     console.info('formatOnSave', `${Date.now() - start}ms`)
-    return [vscode.TextEdit.replace(getFullDocRange(document), text)]
+    return minimalEdit(document, original, formatted)
   } catch (_) {
     return []
   }
 }
 
-function runElmFormat(document: vscode.TextDocument): Promise<string> {
+// Returns a single TextEdit covering only the characters that changed between
+// original and formatted. VS Code uses the edit range to preserve the cursor
+// position, so keeping it small prevents the viewport from jumping on save.
+const minimalEdit = (
+  document: vscode.TextDocument,
+  original: string,
+  formatted: string
+): vscode.TextEdit[] => {
+  if (original === formatted) return []
+
+  // Walk inward from both ends to find the changed region
+  let start = 0
+  while (start < original.length && start < formatted.length && original[start] === formatted[start]) {
+    start++
+  }
+
+  let endOriginal = original.length
+  let endFormatted = formatted.length
+  while (endOriginal > start && endFormatted > start && original[endOriginal - 1] === formatted[endFormatted - 1]) {
+    endOriginal--
+    endFormatted--
+  }
+
+  return [vscode.TextEdit.replace(
+    new vscode.Range(document.positionAt(start), document.positionAt(endOriginal)),
+    formatted.slice(start, endFormatted)
+  )]
+}
+
+function runElmFormat(original: string): Promise<string> {
   const command = `elm-format --stdin --yes`
-  const original = document.getText()
   return new Promise((resolve, reject) => {
     const process_ = child_process.exec(
       command,
@@ -65,13 +94,4 @@ function runElmFormat(document: vscode.TextDocument): Promise<string> {
     process_.stdin?.end()
     return process_
   })
-}
-
-function getFullDocRange(document: vscode.TextDocument): vscode.Range {
-  return document.validateRange(
-    new vscode.Range(
-      new vscode.Position(0, 0),
-      new vscode.Position(Number.MAX_VALUE, Number.MAX_VALUE)
-    )
-  )
 }
