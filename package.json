@@ -145,9 +145,48 @@
           },
           "elmLand.feature.unusedDeclarations": {
             "order": 12,
-            "description": "Highlight unused declarations in the current file (requires elm-find binary)",
-            "type": "boolean",
-            "default": true
+            "description": "Configure which kinds of unused code are highlighted in the current file",
+            "type": "object",
+            "properties": {
+              "exposedDeclarations": {
+                "type": "boolean",
+                "description": "Highlight unused exposed declarations (requires elm-find binary)",
+                "default": true
+              },
+              "exposedVariants": {
+                "type": "boolean",
+                "description": "Highlight unused exposed custom type variants across the codebase (requires elm-find binary)",
+                "default": true
+              },
+              "localDeclarations": {
+                "type": "boolean",
+                "description": "Highlight unused local declarations",
+                "default": true
+              },
+              "letInExpressions": {
+                "type": "boolean",
+                "description": "Highlight unused let-in bindings",
+                "default": true
+              },
+              "arguments": {
+                "type": "boolean",
+                "description": "Highlight unused function arguments",
+                "default": true
+              },
+              "customTypeVariants": {
+                "type": "boolean",
+                "description": "Highlight unused custom type variants",
+                "default": true
+              }
+            },
+            "default": {
+              "exposedDeclarations": true,
+              "localDeclarations": true,
+              "letInExpressions": true,
+              "arguments": true,
+              "customTypeVariants": true,
+              "exposedVariants": true
+            }
           },
           "elmLand.compilerFilepath": {
             "order": 11,
