@@ -13,6 +13,46 @@ export const feature: Feature = ({ globalState, context }) => {
   context.subscriptions.push(
     vscode.languages.registerCodeLensProvider('elm', codeLensProvider(globalState))
   )
+  context.subscriptions.push(
+    vscode.commands.registerCommand('elmLand.removeDeclaration', async (
+      docUri: vscode.Uri,
+      declRange: vscode.Range,
+      projectFolder: string,
+      mentions: ElmFindUsage[]
+    ) => {
+      const wsEdit = new vscode.WorkspaceEdit()
+      const cancelSource = new vscode.CancellationTokenSource()
+
+      // Delete the declaration lines
+      wsEdit.delete(docUri, new vscode.Range(
+        new vscode.Position(declRange.start.line, 0),
+        new vscode.Position(declRange.end.line + 1, 0)
+      ))
+
+      // Group mentions by file and remove each from its exposing list
+      const fileToMentions = new Map<string, ElmFindUsage[]>()
+      for (const mention of mentions) {
+        const absPath = path.resolve(projectFolder, mention.file)
+        const existing = fileToMentions.get(absPath) ?? []
+        existing.push(mention)
+        fileToMentions.set(absPath, existing)
+      }
+
+      for (const [absPath, fileMentions] of fileToMentions) {
+        const fileUri = vscode.Uri.file(absPath)
+        const doc = await vscode.workspace.openTextDocument(fileUri)
+        const ast = await ElmToAst.run(doc.getText(), cancelSource.token)
+        if (!ast) continue
+
+        for (const mention of fileMentions) {
+          removeFromAnyExposingList(wsEdit, fileUri, doc, ast, mention.region)
+        }
+      }
+
+      cancelSource.dispose()
+      await vscode.workspace.applyEdit(wsEdit)
+    })
+  )
 }
 
 const provider = (globalState: GlobalState) => {
@@ -164,10 +204,20 @@ const codeLensProvider = (globalState: GlobalState) => {
       }
 
       const count = locations.length
-      lens.command = {
-        title: `${count} reference${count === 1 ? '' : 's'}`,
-        command: 'editor.action.showReferences',
-        arguments: [docUri, lens.range.start, locations]
+      const isUnusedDeclarationsEnabled: boolean = vscode.workspace.getConfiguration('elmLand').feature.unusedDeclarations
+      const mentions = (definitions ?? []).flatMap(d => d.usages).filter(u => u.tag === 'mention')
+      if (count === 0 && isUnusedDeclarationsEnabled && name !== 'main') {
+        lens.command = {
+          title: 'Remove unused code',
+          command: 'elmLand.removeDeclaration',
+          arguments: [docUri, lens.range, projectFolder, mentions]
+        }
+      } else {
+        lens.command = {
+          title: `${count} reference${count === 1 ? '' : 's'}`,
+          command: 'editor.action.showReferences',
+          arguments: [docUri, lens.range.start, locations]
+        }
       }
 
       return lens
@@ -208,6 +258,76 @@ const getKindForDeclaration = (declaration: ElmSyntax.Node<ElmSyntax.Declaration
     case 'port': return 'value'
     default: return undefined
   }
+}
+
+// Scan all exposing lists in a file's AST and remove the item matching the mention's region.
+// Uses adjacent item ranges to include the surrounding comma and whitespace cleanly.
+const removeFromAnyExposingList = (
+  wsEdit: vscode.WorkspaceEdit,
+  uri: vscode.Uri,
+  doc: vscode.TextDocument,
+  ast: ElmSyntax.Ast,
+  mentionRegion: ElmFindRegion
+): void => {
+  const moduleData = ElmSyntax.toModuleData(ast)
+  if (moduleData.exposingList.value.type === 'explicit') {
+    if (removeFromExposingItems(wsEdit, uri, doc, moduleData.exposingList.value.explicit, mentionRegion, false)) return
+  }
+  for (const import_ of ast.imports) {
+    if (!import_.value.exposingList) continue
+    if (import_.value.exposingList.value.type !== 'explicit') continue
+    if (removeFromExposingItems(wsEdit, uri, doc, import_.value.exposingList.value.explicit, mentionRegion, true)) return
+  }
+}
+
+// Try to remove an item from an explicit exposing list by matching the mention's start position.
+// Returns true if the item was found and an edit was added.
+const removeFromExposingItems = (
+  wsEdit: vscode.WorkspaceEdit,
+  uri: vscode.Uri,
+  doc: vscode.TextDocument,
+  items: ElmSyntax.Node<ElmSyntax.TopLevelExpose>[],
+  mentionRegion: ElmFindRegion,
+  isImport: boolean
+): boolean => {
+  const index = items.findIndex(item =>
+    item.range[0] === mentionRegion.start.line &&
+    item.range[1] === mentionRegion.start.column
+  )
+  if (index === -1) return false
+
+  if (items.length === 1) {
+    if (isImport) {
+      // Remove the whole " exposing (name)" from the import line
+      const lineNum = items[0]!.range[0] - 1
+      const lineText = doc.lineAt(lineNum).text
+      const newText = lineText.replace(/\s+exposing\s*\([^)]*\)/, '')
+      if (newText !== lineText) {
+        wsEdit.replace(uri, doc.lineAt(lineNum).range, newText)
+      }
+    }
+    // For the module's own exposing list with a single item, skip — the compiler
+    // will report the dangling expose and the user can decide what to do.
+    return true
+  }
+
+  const item = items[index]!
+  let deleteRange: vscode.Range
+  if (index < items.length - 1) {
+    // Not last: delete from this item's start to next item's start (includes trailing ", ")
+    deleteRange = new vscode.Range(
+      sharedLogic.fromElmRange(item.range).start,
+      sharedLogic.fromElmRange(items[index + 1]!.range).start
+    )
+  } else {
+    // Last of multiple: delete from prev item's end to this item's end (includes leading ", ")
+    deleteRange = new vscode.Range(
+      sharedLogic.fromElmRange(items[index - 1]!.range).end,
+      sharedLogic.fromElmRange(item.range).end
+    )
+  }
+  wsEdit.delete(uri, deleteRange)
+  return true
 }
 
 // Convert 1-based elm-find positions to 0-based VS Code positions

@@ -143,6 +143,12 @@
             "type": "boolean",
             "default": true
           },
+          "elmLand.feature.unusedDeclarations": {
+            "order": 12,
+            "description": "Highlight unused declarations in the current file (requires elm-find binary)",
+            "type": "boolean",
+            "default": true
+          },
           "elmLand.compilerFilepath": {
             "order": 11,
             "description": "The path to your Elm compiler",
