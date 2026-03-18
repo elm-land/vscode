@@ -343,7 +343,7 @@ const runElmFind = (input: RunElmFindInput): Promise<ElmFindDefinition[] | undef
   return new Promise((resolve) => {
     const { binary, name, kind, moduleName, projectFolder, token } = input
 
-    const args = [name, '--module', moduleName, '--project', projectFolder]
+    const args = [name, '--module', moduleName, '--project', projectFolder, '--local-only']
     if (kind) args.push('--kind', kind)
     const child = child_process.spawn(binary, args, { env: sharedLogic.npxEnv() })
 

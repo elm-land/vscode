@@ -94,6 +94,25 @@ export const feature: Feature = ({ globalState, context }) => {
             console.info(`autocomplete`, `${Date.now() - start}ms`)
             return moduleNameCompletions(moduleName, allModuleNames)
           }
+
+          // Check for record field access (e.g. "model.")
+          let recordMatch = textBeforeCursor.match(recordAccessRegex)
+          if (recordMatch && recordMatch[1] !== undefined) {
+            let accessChain = recordMatch[1].split('.')
+            // "varName." is incomplete syntax, so replace the dot with a space
+            // to get a parseable document before asking for the AST.
+            let dotOffset = document.offsetAt(new vscode.Position(position.line, position.character - 1))
+            let fullText = document.getText()
+            let parseableText = fullText.slice(0, dotOffset) + ' ' + fullText.slice(dotOffset + 1)
+            let ast = await ElmToAst.run(parseableText, token)
+            if (ast) {
+              let fields = findRecordFieldsForAccessChain(ast, accessChain, position)
+              if (fields.length > 0) {
+                // console.info(`autocomplete`, `${Date.now() - start}ms`)
+                return fields.map(toRecordFieldCompletionItem)
+              }
+            }
+          }
         }
 
         // return an empty array if the suggestions are not applicable
@@ -310,6 +329,7 @@ const simplifyAnnotation = (type: string): string => {
 }
 
 type ModuleName = string
+type RecordField = { name: string, type: string }
 
 // Parts for these regexes are taken from here: https://github.com/rtfeldman/node-test-runner/blob/eedf853fc9b45afd73a0db72decebdb856a69771/lib/Parser.js#L234
 //
@@ -320,11 +340,191 @@ const importRegex = /^import\s+(\p{Lu}[_\d\p{L}]*(?:\.\p{Lu}[_\d\p{L}]*)*)(?:\s+
 const moduleQualifierRegex = /(\b\p{Lu}[_\d\p{L}]*\.)+/gu
 // Regular expression to match `Module.Name.` before the cursor, for triggering autocomplete.
 const autocompleteRegex = /(?:\p{Lu}[_\d\p{L}]*\.)+$/u
+// Regular expression to match a lowercase access chain before `.` for record field autocomplete.
+// Captures e.g. "person" from "person." and "person.name" from "person.name."
+const recordAccessRegex = /(\p{Ll}[_\d\p{L}]*(?:\.\p{Ll}[_\d\p{L}]*)*)\.$/u
 
-// 
+// RECORD FIELD COMPLETIONS
+
+const findRecordFieldsForAccessChain = (
+  ast: ElmSyntax.Ast,
+  accessChain: string[],
+  position: vscode.Position
+): RecordField[] => {
+  const recordAliases = buildRecordAliasMap(ast)
+  const [varName, ...fieldChain] = accessChain
+
+  if (varName === undefined) return []
+
+  // Find the type annotation for the root variable
+  let typeAnnotation = findTypeAnnotationForVar(ast, varName, position, recordAliases)
+  if (!typeAnnotation) return []
+
+  // Walk each field in the chain to get the next type annotation
+  for (let fieldName of fieldChain) {
+    typeAnnotation = resolveTypeAnnotationForField(typeAnnotation, recordAliases, fieldName)
+    if (!typeAnnotation) return []
+  }
+
+  return resolveTypeToFields(typeAnnotation, recordAliases)
+}
+
+const buildRecordAliasMap = (
+  ast: ElmSyntax.Ast
+): Map<string, ElmSyntax.Node<ElmSyntax.RecordFieldAnnotation>[]> => {
+  const recordAliases = new Map<string, ElmSyntax.Node<ElmSyntax.RecordFieldAnnotation>[]>()
+  for (let decl of ast.declarations) {
+    if (ElmSyntax.isTypeAliasDeclaration(decl)) {
+      let ta = decl.value.typeAlias
+      if (ta.typeAnnotation.value.type === 'record') {
+        recordAliases.set(ta.name.value, ta.typeAnnotation.value.record.value)
+      }
+    }
+  }
+  return recordAliases
+}
+
+const findTypeAnnotationForVar = (
+  ast: ElmSyntax.Ast,
+  varName: string,
+  position: vscode.Position,
+  recordAliases: Map<string, ElmSyntax.Node<ElmSyntax.RecordFieldAnnotation>[]>
+): ElmSyntax.Node<ElmSyntax.TypeAnnotation> | undefined => {
+  // Find the top-level function declaration containing the cursor position
+  for (let decl of ast.declarations) {
+    if (ElmSyntax.isFunctionDeclaration(decl)) {
+      let [startRow, , endRow] = decl.range
+      // AST rows are 1-indexed; position.line is 0-indexed
+      if (startRow - 1 <= position.line && position.line <= endRow - 1) {
+        let fn = decl.value.function
+
+        // Check function parameters
+        if (fn.signature && fn.declaration.value.arguments.length > 0) {
+          let paramTypes = decomposeFunctionType(fn.signature.value.typeAnnotation)
+          let patterns = fn.declaration.value.arguments
+          for (let i = 0; i < Math.min(paramTypes.length, patterns.length); i++) {
+            let pattern = patterns[i]
+            let paramType = paramTypes[i]
+            if (pattern === undefined || paramType === undefined) continue
+            if (pattern.value.type === 'var' && pattern.value.var.value === varName) {
+              return paramType
+            }
+            // Destructured record parameter: view { name, age } = ...
+            if (pattern.value.type === 'record') {
+              let isField = pattern.value.record.value.some(n => n.value === varName)
+              if (isField) return resolveTypeAnnotationForField(paramType, recordAliases, varName)
+            }
+          }
+        }
+
+        // Check let-in bindings in the function body
+        let letAnnotation = findLetBindingAnnotation(fn.declaration.value.expression, varName)
+        if (letAnnotation) return letAnnotation
+
+        break
+      }
+    }
+  }
+
+  // Check module-level value definitions (top-level, no arguments)
+  for (let decl of ast.declarations) {
+    if (ElmSyntax.isFunctionDeclaration(decl)) {
+      let fn = decl.value.function
+      if (fn.signature
+        && fn.declaration.value.name.value === varName
+        && fn.declaration.value.arguments.length === 0) {
+        return fn.signature.value.typeAnnotation
+      }
+    }
+  }
+
+  return undefined
+}
+
+// Search an expression tree for a let-binding annotation matching varName
+const findLetBindingAnnotation = (
+  expression: ElmSyntax.Node<ElmSyntax.Expression>,
+  varName: string
+): ElmSyntax.Node<ElmSyntax.TypeAnnotation> | undefined => {
+  if (expression.value.type !== 'let') return undefined
+  let letBlock = expression.value.let
+
+  // Check declarations in this let block
+  for (let decl of letBlock.declarations) {
+    if (decl.value.type === 'function') {
+      let fn = decl.value.function
+      if (fn.signature
+        && fn.declaration.value.name.value === varName
+        && fn.declaration.value.arguments.length === 0) {
+        return fn.signature.value.typeAnnotation
+      }
+    }
+  }
+
+  // Recurse into nested let expressions in declaration bodies and the body expression
+  for (let decl of letBlock.declarations) {
+    if (decl.value.type === 'function') {
+      let found = findLetBindingAnnotation(decl.value.function.declaration.value.expression, varName)
+      if (found) return found
+    }
+  }
+  return findLetBindingAnnotation(letBlock.expression, varName)
+}
+
+// Decompose "A -> B -> C" into [A, B, C]
+const decomposeFunctionType = (
+  node: ElmSyntax.Node<ElmSyntax.TypeAnnotation>
+): ElmSyntax.Node<ElmSyntax.TypeAnnotation>[] => {
+  if (node.value.type === 'function') {
+    return [node.value.function.left, ...decomposeFunctionType(node.value.function.right)]
+  }
+  return [node]
+}
+
+// Returns the TypeAnnotation of a named field within a record type
+const resolveTypeAnnotationForField = (
+  typeAnnotation: ElmSyntax.Node<ElmSyntax.TypeAnnotation>,
+  recordAliases: Map<string, ElmSyntax.Node<ElmSyntax.RecordFieldAnnotation>[]>,
+  fieldName: string
+): ElmSyntax.Node<ElmSyntax.TypeAnnotation> | undefined => {
+  let fields: ElmSyntax.Node<ElmSyntax.RecordFieldAnnotation>[] | undefined
+  if (typeAnnotation.value.type === 'record') {
+    fields = typeAnnotation.value.record.value
+  } else if (typeAnnotation.value.type === 'typed') {
+    fields = recordAliases.get(typeAnnotation.value.typed.moduleNameAndName.value.name)
+  }
+  return fields?.find(f => f.value.name.value === fieldName)?.value.typeAnnotation
+}
+
+const resolveTypeToFields = (
+  typeAnnotation: ElmSyntax.Node<ElmSyntax.TypeAnnotation>,
+  recordAliases: Map<string, ElmSyntax.Node<ElmSyntax.RecordFieldAnnotation>[]>
+): RecordField[] => {
+  let fields: ElmSyntax.Node<ElmSyntax.RecordFieldAnnotation>[] | undefined
+  if (typeAnnotation.value.type === 'record') {
+    fields = typeAnnotation.value.record.value
+  } else if (typeAnnotation.value.type === 'typed') {
+    fields = recordAliases.get(typeAnnotation.value.typed.moduleNameAndName.value.name)
+  }
+  return fields?.map(field => ({
+    name: field.value.name.value,
+    type: ElmSyntax.fromTypeAnnotationToString(field.value.typeAnnotation)
+  })) ?? []
+}
+
+const toRecordFieldCompletionItem = (field: RecordField): vscode.CompletionItem => ({
+  label: {
+    label: field.name,
+    detail: simplifyAnnotation(field.type)
+  },
+  kind: vscode.CompletionItemKind.Field
+})
+
+
+//
 // This scans the file with a regex, so we can still provide
 // a good autocomplete experience, even for incomplete Elm files.
-// 
+//
 const getAliasesForCurrentFile = (document: vscode.TextDocument): Map<string, ModuleName[]> => {
   let code = document.getText()
 
