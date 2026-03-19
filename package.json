@@ -143,6 +143,12 @@
             "type": "boolean",
             "default": true
           },
+          "elmLand.feature.suggestedImports": {
+            "order": 12,
+            "description": "Enable the 'Suggested Imports' feature — offers quick-fix actions to add missing imports for unknown variables and types (requires elm-find binary)",
+            "type": "boolean",
+            "default": true
+          },
           "elmLand.feature.unusedDeclarations": {
             "order": 12,
             "description": "Configure which kinds of unused code are highlighted in the current file",

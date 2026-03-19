@@ -12,6 +12,7 @@ import * as OpenSymbolByName from "./features/open-symbol-by-name"
 import * as FindReferences from "./features/find-references"
 import * as Rename from "./features/rename"
 import * as UnusedCode from "./features/unused-code"
+import * as SuggestedImports from "./features/suggested-imports"
 
 export async function activate(context: vscode.ExtensionContext) {
   console.info("ACTIVATE")
@@ -42,6 +43,7 @@ export async function activate(context: vscode.ExtensionContext) {
   FindReferences.feature({ globalState, context })
   Rename.feature({ globalState, context })
   UnusedCode.feature({ globalState, context })
+  SuggestedImports.feature({ globalState, context })
 }
 
 export function deactivate() {

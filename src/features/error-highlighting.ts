@@ -7,7 +7,7 @@ import { GlobalState } from './shared/autodetect-elm-json'
 import { ElmJsonFile } from './shared/elm-json-file'
 import sharedLogic, { Feature } from './shared/logic'
 
-let diagnostics = vscode.languages.createDiagnosticCollection(sharedLogic.pluginId)
+export let diagnostics = vscode.languages.createDiagnosticCollection(sharedLogic.pluginId)
 
 export const feature: Feature = ({ globalState, context }) => {
 
