@@ -74,7 +74,10 @@ const run = async (
       const error = await Elm.compile({ elmJsonFile, elmFilesToCompile })
 
       if (error) {
-        const items = Elm.toDiagnosticItems(elmJsonFile, { error })
+        if (globalState.elmVersion === 'unknown') {
+          globalState.elmVersion = await Elm.version()
+        }
+        const items = Elm.toDiagnosticItems(globalState.elmVersion, elmJsonFile, { error })
         for (var item of items) {
           let { fsPath, diagnostics } = item
           collection.set(vscode.Uri.file(fsPath), diagnostics)
@@ -214,7 +217,37 @@ const Elm = {
     return promise
   },
 
-  toDiagnosticItems: (elmJsonFile: ElmJsonFile, input: { error: ParsedError }): DiagnosticItem[] => {
+  version: (): Promise<string> => new Promise<string>((resolve) => {
+    const isWindows = process.platform === 'win32'
+    const compiler = vscode.workspace.getConfiguration('elmLand').compilerFilepath
+
+    const child = child_process.spawn(
+      compiler,
+      [
+        '--version'
+      ],
+      {
+        env: sharedLogic.npxEnv(),
+        shell: isWindows
+      }
+    )
+
+    child.on('error', () => {
+      resolve('unknown')
+    })
+
+    const stdoutBuffers: Array<Buffer> = []
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdoutBuffers.push(chunk)
+    })
+
+    child.on('exit', (exitCode) => {
+      resolve(exitCode === 0 ? Buffer.concat(stdoutBuffers).toString('utf-8').trim() : 'unknown')
+    })
+  }),
+
+  toDiagnosticItems: (elmVersion: string, elmJsonFile: ElmJsonFile, input: { error: ParsedError }): DiagnosticItem[] => {
     switch (input.error.kind) {
       case 'error':
         let items: DiagnosticItem[] = []
@@ -291,8 +324,8 @@ const Elm = {
             const diagnostic: vscode.Diagnostic = {
               severity: vscode.DiagnosticSeverity.Error,
               range: new vscode.Range(
-                Elm.fromErrorLocation(problem.region.start),
-                Elm.fromErrorLocation(problem.region.end)
+                Elm.fromErrorLocation(elmVersion, problem.region.start),
+                Elm.fromErrorLocation(elmVersion, problem.region.end)
               ),
               message: Elm.formatErrorMessage(problem.title, problem.message)
             }
@@ -308,8 +341,12 @@ const Elm = {
         return []
     }
   },
-  fromErrorLocation: (location: ElmErrorPosition): vscode.Position => {
-    return new vscode.Position(location.line - 1, location.column - 1)
+  fromErrorLocation: (elmVersion: string, location: ElmErrorPosition): vscode.Position => {
+    // Elm 0.19.2 has a bug where the error locations are off-by-one:
+    // https://github.com/elm/compiler/issues/2358
+    return elmVersion === '0.19.2'
+      ? new vscode.Position(location.line, location.column)
+      : new vscode.Position(location.line - 1, location.column - 1)
   },
   formatErrorMessage: (title: string, message: ElmErrorMessage[]) => {
     return title + '\n\n' + message.map(line => {

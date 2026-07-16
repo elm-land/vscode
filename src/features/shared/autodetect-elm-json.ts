@@ -9,6 +9,7 @@ export type GlobalState = {
   elmJsonFiles: ElmJsonFile[]
   cachedDocs: Map<string, ModuleDoc[]>
   jumpToDocDetails: JumpToDocDetails[] | undefined
+  elmVersion: string
 }
 
 export type JumpToDocDetails = {
